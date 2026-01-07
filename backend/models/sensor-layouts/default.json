@@ -1,13 +1,25 @@
 {
-  "layout_name": "Standard Factory Layout (Universal)",
+  "layout_name": "Large Factory Floor (100x100 Scaled)",
   "mounting_points": {
-    "entrance": { "x": -15, "y": 2, "z": 15 },
-    "exit": { "x": 15, "y": 2, "z": 15 },
-    "center": { "x": 0, "y": 5, "z": 0 },
-    "left_wall": { "x": -18, "y": 3, "z": 0 },
-    "right_wall": { "x": 18, "y": 3, "z": 0 },
-    "back_storage": { "x": 0, "y": 2, "z": -15 },
-    "admin_office": { "x": -10, "y": 2, "z": -15 },
-    "loading_zone": { "x": 10, "y": 4, "z": -10 }
+    "entrance": { "x": -30, "y": 2, "z": 45 },
+    "exit": { "x": 30, "y": 2, "z": 45 },
+    
+    "center_hub": { "x": 0, "y": 5, "z": 0 },
+    
+    "left_wall": { "x": -48, "y": 4, "z": 0 },
+    "right_wall": { "x": 48, "y": 4, "z": 0 },
+    
+    "back_storage_center": { "x": 0, "y": 3, "z": -45 },
+    "back_storage_left": { "x": -40, "y": 3, "z": -40 },
+    "back_storage_right": { "x": 40, "y": 3, "z": -40 },
+    
+    "production_line_A": { "x": -25, "y": 2, "z": 10 },
+    "production_line_B": { "x": 25, "y": 2, "z": 10 },
+
+    "assembly_area": { "x": 0, "y": 2, "z": 25 },
+    "quality_control": { "x": 35, "y": 2, "z": -20 },
+    
+    "roof_vent_1": { "x": -20, "y": 15, "z": -20 },
+    "roof_vent_2": { "x": 20, "y": 15, "z": -20 }
   }
 }
