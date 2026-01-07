@@ -1,0 +1,11 @@
+{
+  "room_id": "default_factory_hall",
+  "dimensions": {
+    "width": 40.0,
+    "depth": 40.0,
+    "height": 8.0
+  },
+  "wall_color": "#1f2937",
+  "floor_texture": "concrete",
+  "grid_size": 1.0
+}
