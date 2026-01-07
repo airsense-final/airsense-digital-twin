@@ -1,0 +1,13 @@
+{
+  "layout_name": "Standard Factory Layout (Universal)",
+  "mounting_points": {
+    "entrance": { "x": -15, "y": 2, "z": 15 },
+    "exit": { "x": 15, "y": 2, "z": 15 },
+    "center": { "x": 0, "y": 5, "z": 0 },
+    "left_wall": { "x": -18, "y": 3, "z": 0 },
+    "right_wall": { "x": 18, "y": 3, "z": 0 },
+    "back_storage": { "x": 0, "y": 2, "z": -15 },
+    "admin_office": { "x": -10, "y": 2, "z": -15 },
+    "loading_zone": { "x": 10, "y": 4, "z": -10 }
+  }
+}
