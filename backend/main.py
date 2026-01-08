@@ -73,9 +73,7 @@ def get_digital_twin_data(authorization: str = Header(None), company: str = Quer
         clean_auth = authorization.strip()
         token = clean_auth.split(" ")[1] if " " in clean_auth else clean_auth
             
-    # URL'den gelen string "None" değerini temizle
     target_comp = None if (company == "None" or not company) else company
-    print(f"🔍 [DEBUG] HTTP Request - Company: {target_comp}")
 
     layout_filename = "default.json"
     if target_comp:
@@ -95,12 +93,27 @@ def get_digital_twin_data(authorization: str = Header(None), company: str = Quer
     live_values = adapter.get_live_values(token, target_comp)
     saved_mappings = load_mappings_from_db()
 
+    # main.py içindeki get_digital_twin_data fonksiyonundaki live_map döngüsünü bununla değiştir:
+
     live_map = {}
     for item in live_values:
-        s_id = item.get("sensor_id") or (item.get("metadata", {}).get("sensor_id") if isinstance(item.get("metadata"), dict) else None)
-        # KRİTİK: Python or mantığı
-        val = item.get("value") or item.get("latest_value") or item.get("current_value") or 0
-        if s_id: live_map[s_id] = val
+        # JSON yapısına göre ID metadata içindedir
+        metadata = item.get("metadata", {})
+        s_id = None
+        
+        if isinstance(metadata, dict):
+            s_id = metadata.get("sensor_id")
+        
+        # Eğer metadata'da yoksa ana objeye bak
+        if not s_id:
+            s_id = item.get("sensor_id") or item.get("_id")
+
+        val = item.get("value")
+        if val is None:
+            val = item.get("latest_value") or item.get("current_value") or 0
+            
+        if s_id:
+            live_map[str(s_id)] = val # Eşleşme garantisi için string
 
     mapped_results = []
     available_slots = list(mounting_points.keys()) 
@@ -108,7 +121,7 @@ def get_digital_twin_data(authorization: str = Header(None), company: str = Quer
     processed_ids = set()
 
     for sensor in sensors_metadata:
-        s_id = sensor.get("sensor_id")
+        s_id = str(sensor.get("sensor_id"))
         api_raw_loc = str(sensor.get("location", "unknown")).lower()
         db_loc = saved_mappings.get(s_id)
         final_loc = None
@@ -131,7 +144,7 @@ def get_digital_twin_data(authorization: str = Header(None), company: str = Quer
             processed_ids.add(s_id)
 
     for sensor in sensors_metadata:
-        s_id = sensor.get("sensor_id")
+        s_id = str(sensor.get("sensor_id"))
         if s_id in processed_ids: continue 
         found_slot = next((slot for slot in available_slots if slot not in used_slots), None)
         if found_slot:
@@ -182,34 +195,23 @@ def get_room_config():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), company: str = Query(None)):
-    # URL'den gelen string "None"ı gerçek Python None değerine çevir
     target_comp = None if (company == "None" or not company) else company
-    
-    # 1. Bağlantıyı kabul et
     await manager.connect(websocket)
-    print(f"🔌 İstemci Bağlandı. Şirket: {target_comp}")
+    print(f"🔌 WebSocket Bağlantısı Kuruldu. Şirket: {target_comp}")
     
     try:
         while True:
-            # 2. Veri çekme ve gönderme işlemi
             try:
-                # Veriyi ana backend'den çek
                 live_data = adapter.get_live_values(token=token, target_company=target_comp)
-                
                 if live_data and len(live_data) > 0:
-                    # KRİTİK: Eğer send_json hata verirse (bağlantı koptuysa) 
-                    # bir altındaki 'except' bloğuna düşecek ve döngü kırılacak.
                     await websocket.send_json({
                         "type": "SENSOR_UPDATE", 
                         "data": live_data
                     })
             except Exception as inner_e:
-                # Veri çekilemediyse veya bağlantı koptuğu için gönderilemediyse döngüyü kır!
-                # Bu 'break' komutu terminali dolduran o hataları anında durdurur.
-                print(f"⚠️ İletişim koptu veya bağlantı kapandı, döngü sonlandırılıyor: {inner_e}")
+                print(f"⚠️ İletişim koptu: {inner_e}")
                 break 
 
-            # 3. CPU'yu yormamak için her tur sonunda mutlaka bekle
             await asyncio.sleep(2)
 
     except WebSocketDisconnect:
@@ -217,6 +219,4 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), comp
     except Exception as e:
         print(f"⚠️ Beklenmedik WS Hatası: {e}")
     finally:
-        # 4. Bağlantıyı temizle ve listeden kesin olarak çıkar
         manager.disconnect(websocket)
-        print("❌ Bağlantı tamamen temizlendi.")
