@@ -1,40 +1,58 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { MapControls, ContactShadows } from '@react-three/drei';
-import axios from 'axios';
+import React, { useEffect, useState, useRef } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { MapControls, ContactShadows } from "@react-three/drei";
+import axios from "axios";
 
-import { FactoryArchitecture } from './FactoryArchitecture';
-import { HeatmapLayer } from './HeatmapLayer';
-import { SensorNode } from './SensorNode';
+import { FactoryArchitecture } from "./FactoryArchitecture";
+import { HeatmapLayer } from "./HeatmapLayer";
+import { SensorNode } from "./SensorNode";
 
 const getQueryParams = () => {
   const params = new URLSearchParams(window.location.search);
   return {
     token: params.get("token"),
     role: params.get("role")?.toLowerCase(),
-    userCompany: params.get("company")
+    userCompany: params.get("company"),
   };
 };
 
 const KeyboardMapMover = ({ controlsRef }: { controlsRef: any }) => {
-    const { camera } = useThree();
-    const [keys, setKeys] = useState<{ [key: string]: boolean }>({});
-    useEffect(() => {
-      const down = (e: KeyboardEvent) => setKeys(k => ({ ...k, [e.code]: true }));
-      const up = (e: KeyboardEvent) => setKeys(k => ({ ...k, [e.code]: false }));
-      window.addEventListener('keydown', down); window.addEventListener('keyup', up);
-      return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); }
-    }, []);
-    useFrame((state, delta) => {
-        if (!controlsRef.current) return;
-        const speed = (keys['ShiftLeft'] || keys['ShiftRight']) ? 60 : 25; 
-        const step = speed * delta;
-        if (keys['ArrowUp'] || keys['KeyW']) { controlsRef.current.target.z -= step; camera.position.z -= step; }
-        if (keys['ArrowDown'] || keys['KeyS']) { controlsRef.current.target.z += step; camera.position.z += step; }
-        if (keys['ArrowLeft'] || keys['KeyA']) { controlsRef.current.target.x -= step; camera.position.x -= step; }
-        if (keys['ArrowRight'] || keys['KeyD']) { controlsRef.current.target.x += step; camera.position.x += step; }
-    });
-    return null;
+  const { camera } = useThree();
+  const [keys, setKeys] = useState<{ [key: string]: boolean }>({});
+  useEffect(() => {
+    const down = (e: KeyboardEvent) =>
+      setKeys((k) => ({ ...k, [e.code]: true }));
+    const up = (e: KeyboardEvent) =>
+      setKeys((k) => ({ ...k, [e.code]: false }));
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+  useFrame((state, delta) => {
+    if (!controlsRef.current) return;
+    const speed = keys["ShiftLeft"] || keys["ShiftRight"] ? 60 : 25;
+    const step = speed * delta;
+    if (keys["ArrowUp"] || keys["KeyW"]) {
+      controlsRef.current.target.z -= step;
+      camera.position.z -= step;
+    }
+    if (keys["ArrowDown"] || keys["KeyS"]) {
+      controlsRef.current.target.z += step;
+      camera.position.z += step;
+    }
+    if (keys["ArrowLeft"] || keys["KeyA"]) {
+      controlsRef.current.target.x -= step;
+      camera.position.x -= step;
+    }
+    if (keys["ArrowRight"] || keys["KeyD"]) {
+      controlsRef.current.target.x += step;
+      camera.position.x += step;
+    }
+  });
+  return null;
 };
 
 export const FactoryScene = () => {
@@ -42,151 +60,358 @@ export const FactoryScene = () => {
   const [companies, setCompanies] = useState<any[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [isSimulationMode, setIsSimulationMode] = useState(false); 
-  const [showHeatmap, setShowHeatmap] = useState(false);           
-  
-  const controlsRef = useRef<any>(null); 
+  const [isSimulationMode, setIsSimulationMode] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+
+  const controlsRef = useRef<any>(null);
   const { token, role, userCompany } = getQueryParams();
-  const [selectedCompany, setSelectedCompany] = useState<string>(userCompany || "");
+  const [selectedCompany, setSelectedCompany] = useState<string>(
+    userCompany || ""
+  );
 
-  if (!token) return <div style={{height: '100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'white', background:'#0f172a'}}><h1>⛔ Access Denied</h1></div>;
+  if (!token)
+    return (
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "white",
+          background: "#0f172a",
+        }}
+      >
+        <h1>⛔ Access Denied</h1>
+      </div>
+    );
 
-  // 1. Şirket Listesini Çek (SuperAdmin için bir kez)
+  // 1. Şirket Listesini Çek
   useEffect(() => {
-    if (role === 'superadmin') {
-        axios.get('http://127.0.0.1:8001/api/companies').then(res => {
-            setCompanies(res.data);
-            if (!userCompany && res.data.length > 0) setSelectedCompany(res.data[0].name);
-        });
+    if (role === "superadmin") {
+      axios.get("http://127.0.0.1:8001/api/companies").then((res) => {
+        setCompanies(res.data);
+        if (!userCompany && res.data.length > 0)
+          setSelectedCompany(res.data[0].name);
+      });
     } else if (userCompany) {
-        setSelectedCompany(userCompany);
+      setSelectedCompany(userCompany);
     }
   }, [role, userCompany]);
 
-  // 2. Canlı Veri Akışı ve WebSocket
+  // FactoryScene.tsx içindeki useEffect bloğunu bu tam haliyle değiştir:
+
+// 2. Canlı Veri Akışı ve WebSocket
   useEffect(() => {
-    // Initial Load (HTTP ile ilk metadata ve konumları al)
     const fetchInitialData = async () => {
-        if (!token) return;
-        try {
-          const params: any = {};
-          if (role === 'superadmin' && selectedCompany) params.company = selectedCompany;
-          const res = await axios.get(`http://127.0.0.1:8001/api/digital-twin-data`, { 
-              headers: { 'Authorization': `Bearer ${token}` }, 
-              params: params 
-          });
-          setSensors(res.data);
-        } catch (e) { console.error("Initial Fetch Error:", e); }
+      if (!token) return;
+      try {
+        const params: any = {};
+        if (role === "superadmin" && selectedCompany)
+          params.company = selectedCompany;
+        const res = await axios.get(
+          `http://127.0.0.1:8001/api/digital-twin-data`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: params,
+          }
+        );
+        // Metadata ID'lerinin doğruluğunu logla
+        console.log(
+          "📍 Yüklenen Sensörler:",
+          res.data.map((s: any) => s.id)
+        );
+        setSensors(res.data);
+      } catch (e) {
+        console.error("Initial Fetch Error:", e);
+      }
     };
+
     fetchInitialData();
 
-    // Slotları çek
     if (selectedCompany) {
-        axios.get('http://127.0.0.1:8001/api/layout-slots', { params: { company: selectedCompany } })
-             .then(res => setAvailableSlots(res.data));
+      axios
+        .get("http://127.0.0.1:8001/api/layout-slots", {
+          params: { company: selectedCompany },
+        })
+        .then((res) => setAvailableSlots(res.data));
     }
 
-    // --- WEBSOCKET BAĞLANTISI ---
+    // --- WEBSOCKET MANTIĞI ---
     let ws: WebSocket | null = null;
-    if (!isSimulationMode && token) {
-        const companyParam = (role === 'superadmin' && selectedCompany) ? `&company=${encodeURIComponent(selectedCompany)}` : "";
-        const wsUrl = `ws://127.0.0.1:8001/ws?token=${encodeURIComponent(token)}${companyParam}`;
-        
-        ws = new WebSocket(wsUrl);
 
-        ws.onopen = () => console.log("✅ WebSocket Bağlandı: Canlı veri akışı aktif");
+    if (token) {
+      const companyParam =
+        role === "superadmin" && selectedCompany
+          ? `&company=${encodeURIComponent(selectedCompany)}`
+          : "";
+      const wsUrl = `ws://127.0.0.1:8001/ws?token=${encodeURIComponent(
+        token
+      )}${companyParam}`;
 
-        ws.onmessage = (event) => {
-            try {
-                const message = JSON.parse(event.data);
-                if (message.type === "SENSOR_UPDATE" && Array.isArray(message.data)) {
-                    setSensors(prev => prev.map(s => {
-                        const match = message.data.find((u: any) => (u.sensor_id || u.id) === s.id);
-                        if (match) {
-                            // Değeri bul (match.value, match.latest_value veya match.current_value olabilir)
-                            const val = match.value ?? match.latest_value ?? match.current_value;
-                            return val !== undefined ? { ...s, value: val } : s;
-                        }
-                        return s;
-                    }));
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => console.log("✅ WebSocket Bağlandı: Canlı akış aktif");
+
+      ws.onmessage = (event) => {
+        // Simülasyon modundaysak canlı veriyi görmezden gel (kullanıcının girdiği değer kalsın)
+        if (isSimulationMode) return;
+
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === "SENSOR_UPDATE" && Array.isArray(message.data)) {
+            setSensors((prevSensors) => {
+              // Mevcut sensör listesini yeni gelen veriyle güncelle
+              return prevSensors.map((sensor) => {
+                // Backend'den gelen her türlü ID formatını (metadata.sensor_id, sensor_id veya _id) kontrol et
+                const match = message.data.find((u: any) => {
+                  const incomingId = u.metadata?.sensor_id || u.sensor_id || u._id;
+                  return String(incomingId) === String(sensor.id);
+                });
+
+                if (match) {
+                  const newVal = match.value ?? match.latest_value ?? match.current_value;
+                  // Sadece değer gerçekten değiştiyse yeni referans oluştur (render tetiklenir)
+                  if (newVal !== sensor.value) {
+                    return { ...sensor, value: newVal };
+                  }
                 }
-            } catch (e) { console.error("WS Message Parse Error:", e); }
-        };
+                return sensor;
+              });
+            });
+          }
+        } catch (e) {
+          console.error("Parse hatası:", e);
+        }
+      };
 
-        ws.onerror = (err) => console.error("🔌 WebSocket Hatası:", err);
-        ws.onclose = () => console.log("🔌 WebSocket Bağlantısı Kesildi");
+      ws.onerror = (err) => console.error("🔌 WebSocket Hatası:", err);
+      ws.onclose = () => console.log("🔌 WebSocket Bağlantısı Kesildi");
 
-        // CLEANUP: Bileşen kapandığında veya parametreler değiştiğinde eski WS'i kapat
-        return () => {
-            if (ws) {
-                console.log("🧹 WebSocket temizleniyor...");
-                ws.close();
-            }
-        };
+      // CLEANUP: Component kapandığında veya s.company/token değiştiğinde WS'i kapat
+      return () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          console.log("🧹 WebSocket temizleniyor...");
+          ws.close();
+        }
+      };
     }
-  }, [selectedCompany, token, isSimulationMode, role]);
+    // DÜZELTME: isSimulationMode'u bağımlılık listesinden çıkardık. 
+    // Böylece simülasyonu açıp kapatınca WebSocket bağlantın kopmayacak.
+  }, [selectedCompany, token, role]);
 
-  const handleUpdateLocation = async (sensorId: string, newLocation: string) => {
+  const handleUpdateLocation = async (
+    sensorId: string,
+    newLocation: string
+  ) => {
     try {
-        await axios.post('http://127.0.0.1:8001/api/map-sensor', { sensor_id: sensorId, location_key: newLocation }, { headers: { 'Authorization': `Bearer ${token}` } });
-        setSensors(prev => prev.map(s => s.id === sensorId ? {...s, location_name: newLocation} : s));
-    } catch (e) { alert("Error updating location."); }
+      await axios.post(
+        "http://127.0.0.1:8001/api/map-sensor",
+        { sensor_id: sensorId, location_key: newLocation },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSensors((prev) =>
+        prev.map((s) =>
+          s.id === sensorId ? { ...s, location_name: newLocation } : s
+        )
+      );
+    } catch (e) {
+      alert("Error updating location.");
+    }
   };
 
   const handleSimulateValue = (sensorId: string, newValue: number) => {
-      setSensors(prev => prev.map(s => s.id === sensorId ? { ...s, value: newValue } : s));
+    setSensors((prev) =>
+      prev.map((s) => (s.id === sensorId ? { ...s, value: newValue } : s))
+    );
   };
 
   const locationCounts: Record<string, number> = {};
   const getOffset = (locName: string) => {
-     const offset = locationCounts[locName] || 0;
-     locationCounts[locName] = offset + 1;
-     return offset;
+    const offset = locationCounts[locName] || 0;
+    locationCounts[locName] = offset + 1;
+    return offset;
   };
 
   return (
-    <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', background: '#0f172a' }}>
-      {/* HEADER */}
-      <div style={{ background: '#0f172a', padding: '15px 25px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1e293b', zIndex: 10 }}>
-        <h2 style={{ color: 'white', margin: 0, fontSize: '20px', fontFamily:'sans-serif' }}>
-          🏭 AirSense Twin <span style={{fontSize:'12px', background:'#1e293b', padding:'2px 8px', borderRadius:'10px', color:'#94a3b8'}}>{selectedCompany || "Default"}</span>
+    <div
+      style={{
+        width: "100%",
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "#0f172a",
+      }}
+    >
+      <div
+        style={{
+          background: "#0f172a",
+          padding: "15px 25px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid #1e293b",
+          zIndex: 10,
+        }}
+      >
+        <h2
+          style={{
+            color: "white",
+            margin: 0,
+            fontSize: "20px",
+            fontFamily: "sans-serif",
+          }}
+        >
+          🏭 AirSense Twin{" "}
+          <span
+            style={{
+              fontSize: "12px",
+              background: "#1e293b",
+              padding: "2px 8px",
+              borderRadius: "10px",
+              color: "#94a3b8",
+            }}
+          >
+            {selectedCompany || "Default"}
+          </span>
         </h2>
-        <div style={{display:'flex', gap:'10px'}}>
-          <button onClick={() => { setIsSimulationMode(!isSimulationMode); setIsEditMode(false); }} style={{ background: isSimulationMode ? '#9333ea' : '#1e293b', color: 'white', border: '1px solid #334155', padding: '8px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>{isSimulationMode ? "🧪 SIMULATION ACTIVE" : "🧪 SIMULATION"}</button>
-          <button onClick={() => setShowHeatmap(!showHeatmap)} style={{ background: showHeatmap ? '#ea580c' : '#1e293b', color: 'white', border: '1px solid #334155', padding: '8px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>🔥 HEATMAP</button>
-          <button onClick={() => { setIsEditMode(!isEditMode); setIsSimulationMode(false); }} style={{ background: isEditMode ? '#2563eb' : '#1e293b', color: 'white', border: '1px solid #334155', padding: '8px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>{isEditMode ? "💾 SAVE" : "✏️ LAYOUT"}</button>
-          {role === 'superadmin' && (
-            <select value={selectedCompany} onChange={(e) => setSelectedCompany(e.target.value)} style={{ background: '#1e293b', color: 'white', padding: '8px 12px', borderRadius: '6px', border: '1px solid #334155' }}>
-                {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => {
+              setIsSimulationMode(!isSimulationMode);
+              setIsEditMode(false);
+            }}
+            style={{
+              background: isSimulationMode ? "#9333ea" : "#1e293b",
+              color: "white",
+              border: "1px solid #334155",
+              padding: "8px 20px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            {isSimulationMode ? "🧪 SIMULATION ACTIVE" : "🧪 SIMULATION"}
+          </button>
+          <button
+            onClick={() => setShowHeatmap(!showHeatmap)}
+            style={{
+              background: showHeatmap ? "#ea580c" : "#1e293b",
+              color: "white",
+              border: "1px solid #334155",
+              padding: "8px 20px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            🔥 HEATMAP
+          </button>
+          <button
+            onClick={() => {
+              setIsEditMode(!isEditMode);
+              setIsSimulationMode(false);
+            }}
+            style={{
+              background: isEditMode ? "#2563eb" : "#1e293b",
+              color: "white",
+              border: "1px solid #334155",
+              padding: "8px 20px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            {isEditMode ? "💾 SAVE" : "✏️ LAYOUT"}
+          </button>
+          {role === "superadmin" && (
+            <select
+              value={selectedCompany}
+              onChange={(e) => setSelectedCompany(e.target.value)}
+              style={{
+                background: "#1e293b",
+                color: "white",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "1px solid #334155",
+              }}
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           )}
         </div>
       </div>
 
-      {/* 3D CANVAS AREA */}
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div style={{ flex: 1, position: "relative" }}>
         <Canvas shadows camera={{ position: [20, 25, 30], fov: 45 }}>
-          <color attach="background" args={['#e5e7eb']} /> 
-          <fog attach="fog" args={['#e5e7eb', 40, 180]} /> 
-          <hemisphereLight intensity={0.8} groundColor="#d1d5db" color="#ffffff" />
-          <directionalLight position={[50, 80, 50]} intensity={1.5} castShadow />
+          <color attach="background" args={["#e5e7eb"]} />
+          <fog attach="fog" args={["#e5e7eb", 40, 180]} />
+          <hemisphereLight
+            intensity={0.8}
+            groundColor="#d1d5db"
+            color="#ffffff"
+          />
+          <directionalLight
+            position={[50, 80, 50]}
+            intensity={1.5}
+            castShadow
+          />
           <pointLight position={[0, 18, 0]} intensity={0.5} />
-          
+
           <KeyboardMapMover controlsRef={controlsRef} />
-          <MapControls ref={controlsRef} screenSpacePanning={true} dampingFactor={0.05} minDistance={5} maxDistance={90} />
-          
+          <MapControls
+            ref={controlsRef}
+            screenSpacePanning={true}
+            dampingFactor={0.05}
+            minDistance={5}
+            maxDistance={90}
+          />
+
           <FactoryArchitecture />
           <HeatmapLayer sensors={sensors} visible={showHeatmap} />
-          <ContactShadows resolution={1024} scale={150} blur={3} opacity={0.4} far={10} color="#000000" />
-          
-          {sensors.map(s => <SensorNode key={s.id} data={s} availableSlots={availableSlots} onUpdateLocation={handleUpdateLocation} onSimulateValue={handleSimulateValue} isEditMode={isEditMode} isSimulationMode={isSimulationMode} indexOffset={getOffset(s.location_name)} />)}
+          <ContactShadows
+            resolution={1024}
+            scale={150}
+            blur={3}
+            opacity={0.4}
+            far={10}
+            color="#000000"
+          />
+
+          {sensors.map((s) => (
+            <SensorNode
+              key={s.id}
+              data={s}
+              availableSlots={availableSlots}
+              onUpdateLocation={handleUpdateLocation}
+              onSimulateValue={handleSimulateValue}
+              isEditMode={isEditMode}
+              isSimulationMode={isSimulationMode}
+              indexOffset={getOffset(s.location_name)}
+            />
+          ))}
         </Canvas>
-        
-        {/* UI OVERLAYS */}
-        <div style={{position:'absolute', bottom:'30px', left:'30px', background:'rgba(15, 23, 42, 0.8)', color:'#e5e7eb', padding:'15px', borderRadius:'8px', fontSize:'12px', border:'1px solid #334155'}}>
-            🎮 <b>Controls:</b><br/>• Left Click: Pan | Right Click: Rotate<br/>• WASD: Move | Shift: Fast
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: "30px",
+            left: "30px",
+            background: "rgba(15, 23, 42, 0.8)",
+            color: "#e5e7eb",
+            padding: "15px",
+            borderRadius: "8px",
+            fontSize: "12px",
+            border: "1px solid #334155",
+          }}
+        >
+          🎮 <b>Controls:</b>
+          <br />• Left Click: Pan | Right Click: Rotate
+          <br />• WASD: Move | Shift: Fast
         </div>
-        {isSimulationMode && <div style={{position:'absolute', top:'20px', left:'50%', transform:'translateX(-50%)', background:'#9333ea', color:'white', padding:'8px 20px', borderRadius:'20px', fontWeight:'bold'}}>🧪 SIMULATION MODE ACTIVE</div>}
       </div>
     </div>
   );
