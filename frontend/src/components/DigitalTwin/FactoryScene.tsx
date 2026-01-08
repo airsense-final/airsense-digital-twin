@@ -62,12 +62,23 @@ export const FactoryScene = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSimulationMode, setIsSimulationMode] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  
+  // --- YENI: SAAT ICIN STATE ---
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const controlsRef = useRef<any>(null);
   const { token, role, userCompany } = getQueryParams();
   const [selectedCompany, setSelectedCompany] = useState<string>(
     userCompany || ""
   );
+
+  // --- YENI: SAAT GUNCELLEME MEKANIZMASI ---
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (!token)
     return (
@@ -85,7 +96,6 @@ export const FactoryScene = () => {
       </div>
     );
 
-  // 1. Şirket Listesini Çek
   useEffect(() => {
     if (role === "superadmin") {
       axios.get("http://127.0.0.1:8001/api/companies").then((res) => {
@@ -98,9 +108,6 @@ export const FactoryScene = () => {
     }
   }, [role, userCompany]);
 
-  // FactoryScene.tsx içindeki useEffect bloğunu bu tam haliyle değiştir:
-
-// 2. Canlı Veri Akışı ve WebSocket
   useEffect(() => {
     const fetchInitialData = async () => {
       if (!token) return;
@@ -115,7 +122,6 @@ export const FactoryScene = () => {
             params: params,
           }
         );
-        // Metadata ID'lerinin doğruluğunu logla
         console.log(
           "📍 Yüklenen Sensörler:",
           res.data.map((s: any) => s.id)
@@ -136,7 +142,6 @@ export const FactoryScene = () => {
         .then((res) => setAvailableSlots(res.data));
     }
 
-    // --- WEBSOCKET MANTIĞI ---
     let ws: WebSocket | null = null;
 
     if (token) {
@@ -153,16 +158,13 @@ export const FactoryScene = () => {
       ws.onopen = () => console.log("✅ WebSocket Bağlandı: Canlı akış aktif");
 
       ws.onmessage = (event) => {
-        // Simülasyon modundaysak canlı veriyi görmezden gel (kullanıcının girdiği değer kalsın)
         if (isSimulationMode) return;
 
         try {
           const message = JSON.parse(event.data);
           if (message.type === "SENSOR_UPDATE" && Array.isArray(message.data)) {
             setSensors((prevSensors) => {
-              // Mevcut sensör listesini yeni gelen veriyle güncelle
               return prevSensors.map((sensor) => {
-                // Backend'den gelen her türlü ID formatını (metadata.sensor_id, sensor_id veya _id) kontrol et
                 const match = message.data.find((u: any) => {
                   const incomingId = u.metadata?.sensor_id || u.sensor_id || u._id;
                   return String(incomingId) === String(sensor.id);
@@ -170,9 +172,10 @@ export const FactoryScene = () => {
 
                 if (match) {
                   const newVal = match.value ?? match.latest_value ?? match.current_value;
-                  // Sadece değer gerçekten değiştiyse yeni referans oluştur (render tetiklenir)
-                  if (newVal !== sensor.value) {
-                    return { ...sensor, value: newVal };
+                  const newTimestamp = match.timestamp;
+
+                  if (newVal !== sensor.value || newTimestamp !== sensor.timestamp) {
+                    return { ...sensor, value: newVal, timestamp: newTimestamp };
                   }
                 }
                 return sensor;
@@ -187,7 +190,6 @@ export const FactoryScene = () => {
       ws.onerror = (err) => console.error("🔌 WebSocket Hatası:", err);
       ws.onclose = () => console.log("🔌 WebSocket Bağlantısı Kesildi");
 
-      // CLEANUP: Component kapandığında veya s.company/token değiştiğinde WS'i kapat
       return () => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           console.log("🧹 WebSocket temizleniyor...");
@@ -195,9 +197,7 @@ export const FactoryScene = () => {
         }
       };
     }
-    // DÜZELTME: isSimulationMode'u bağımlılık listesinden çıkardık. 
-    // Böylece simülasyonu açıp kapatınca WebSocket bağlantın kopmayacak.
-  }, [selectedCompany, token, role]);
+  }, [selectedCompany, token, role, isSimulationMode]);
 
   const handleUpdateLocation = async (
     sensorId: string,
@@ -274,7 +274,26 @@ export const FactoryScene = () => {
             {selectedCompany || "Default"}
           </span>
         </h2>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          
+          {/* SAAT BILEŞENI (Butonlardan hemen önce, sağ üst grup içinde) */}
+          <div
+            style={{
+              background: "#1e293b",
+              color: "#38bdf8",
+              padding: "8px 15px",
+              borderRadius: "6px",
+              border: "1px solid #334155",
+              fontFamily: "monospace",
+              fontSize: "16px",
+              fontWeight: "bold",
+              marginRight: "10px",
+              letterSpacing: "1px"
+            }}
+          >
+            {currentTime.toLocaleTimeString([], { hour12: false })}
+          </div>
+
           <button
             onClick={() => {
               setIsSimulationMode(!isSimulationMode);
@@ -321,7 +340,7 @@ export const FactoryScene = () => {
               fontWeight: "bold",
             }}
           >
-            {isEditMode ? "💾 SAVE" : "✏️ LAYOUT"}
+            {isEditMode ? "💾 SAVE" : "✏️ EDIT"}
           </button>
           {role === "superadmin" && (
             <select

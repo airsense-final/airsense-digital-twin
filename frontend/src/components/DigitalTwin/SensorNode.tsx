@@ -6,12 +6,24 @@ const formatValue = (val: any) => {
     return val;
 };
 
+const formatTimestamp = (utcString: string) => {
+    if (!utcString) return "--:--:--";
+    try {
+        let normalizedStr = utcString;
+        if (!normalizedStr.endsWith('Z') && !normalizedStr.includes('+')) normalizedStr += 'Z';
+        const date = new Date(normalizedStr);
+        const turkeyTime = new Date(date.getTime() + (3 * 60 * 60 * 1000));
+        return `${turkeyTime.getUTCHours().toString().padStart(2, '0')}:${turkeyTime.getUTCMinutes().toString().padStart(2, '0')}:${turkeyTime.getUTCSeconds().toString().padStart(2, '0')}`;
+    } catch (e) { return utcString; }
+};
+
 export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateValue, isEditMode, isSimulationMode, indexOffset }: any) => {
-  let color = "#16a34a"; 
-  if (data.value > 30) color = "#facc15"; 
-  if (data.value > 70) color = "#dc2626"; 
-  if (isEditMode && data.is_manual) color = "#2563eb"; 
-  if (isSimulationMode) color = "#a855f7"; 
+  // Durum rengi (Değere göre değişen LED rengi)
+  let statusColor = "#16a34a"; 
+  if (data.value > 30) statusColor = "#facc15"; 
+  if (data.value > 70) statusColor = "#dc2626"; 
+  if (isEditMode && data.is_manual) statusColor = "#2563eb"; 
+  if (isSimulationMode) statusColor = "#a855f7"; 
 
   const [showPopup, setShowPopup] = useState(false);
   const adjustedX = data.position.x + (indexOffset * 1.5); 
@@ -19,41 +31,121 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
 
   return (
     <group position={[adjustedX, data.position.y, adjustedZ]}>
-      <mesh onClick={() => setShowPopup(!showPopup)} castShadow>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={color} roughness={0.3} metalness={0.5} />
-      </mesh>
-      <mesh position={[0, -data.position.y / 2, 0]} castShadow><cylinderGeometry args={[0.05, 0.05, data.position.y, 8]} /><meshStandardMaterial color="#4b5563" metalness={0.8} /></mesh>
-      <Text position={[0, 1.5, 0]} fontSize={0.8} color="#1f2937" anchorX="center" anchorY="middle" outlineWidth={0.05} outlineColor="white" fontWeight="bold">{data.type ? data.type.split(" ")[0] : "Sensor"}</Text>
+      
+      {/* 1. SENSÖR ANA GÖVDESİ (Endüstriyel Kasa) */}
+      <group onClick={() => setShowPopup(!showPopup)}>
+        {/* Ana Şasi */}
+        <mesh castShadow>
+          <boxGeometry args={[1.2, 0.7, 1.2]} />
+          <meshStandardMaterial color="#334155" roughness={0.4} metalness={0.7} />
+        </mesh>
 
+        {/* Ön Panel / Ekran Alanı */}
+        <mesh position={[0, 0, 0.61]}>
+          <boxGeometry args={[0.9, 0.4, 0.05]} />
+          <meshStandardMaterial color="#1e293b" metalness={0.9} roughness={0.1} />
+        </mesh>
+
+        {/* Durum LED'i (Parlayan Işık) */}
+        <mesh position={[0.4, 0.2, 0.62]}>
+          <sphereGeometry args={[0.08, 16, 16]} />
+          <meshStandardMaterial 
+            color={statusColor} 
+            emissive={statusColor} 
+            emissiveIntensity={1.5} 
+          />
+        </mesh>
+
+        {/* IoT Anteni */}
+        <mesh position={[-0.4, 0.35, -0.4]}>
+          <cylinderGeometry args={[0.03, 0.03, 0.8, 8]} />
+          <meshStandardMaterial color="#1f2937" metalness={1} />
+        </mesh>
+        <mesh position={[-0.4, 0.75, -0.4]}>
+          <sphereGeometry args={[0.05, 8, 8]} />
+          <meshStandardMaterial color="#1f2937" />
+        </mesh>
+      </group>
+
+      {/* 2. MONTAJ APARATI VE DİREK */}
+      {/* Bağlantı Kafası */}
+      <mesh position={[0, -0.45, 0]}>
+        <cylinderGeometry args={[0.2, 0.3, 0.2, 16]} />
+        <meshStandardMaterial color="#475569" metalness={0.8} />
+      </mesh>
+
+      {/* Ana Direk (Daha ince ve metalik) */}
+      <mesh position={[0, -data.position.y / 2 - 0.5, 0]} castShadow>
+          <cylinderGeometry args={[0.07, 0.07, data.position.y, 12]} />
+          <meshStandardMaterial color="#94a3b8" metalness={0.9} roughness={0.2} />
+      </mesh>
+
+      {/* Üst Bilgi Yazısı */}
+      <Text 
+        position={[0, 1.8, 0]} 
+        fontSize={0.6} 
+        color="#ffffff" 
+        anchorX="center" 
+        anchorY="middle" 
+        outlineWidth={0.04} 
+        outlineColor="#1e293b" 
+        fontWeight="bold"
+      >
+          {data.type ? data.type.split(" ")[0].toUpperCase() : "IOT NODE"}
+      </Text>
+
+      {/* 3. POPUP UI (Tasarımı modernize edildi) */}
       {showPopup && (
-        <Html position={[0, 2.2, 0]} center zIndexRange={[100, 0]}>
-          <div style={{ background: 'white', color: '#1f2937', padding: '8px', borderRadius:'6px', minWidth: '160px', textAlign: 'center', border: `2px solid ${color}`, boxShadow: '0 4px 10px rgba(0,0,0,0.2)', fontFamily: 'sans-serif' }}>
-            <div style={{fontWeight:'bold', fontSize:'11px', color:'#6b7280', marginBottom:'2px'}}>{data.name}</div>
+        <Html position={[0, 2.5, 0]} center zIndexRange={[100, 0]}>
+          <div style={{ 
+            background: 'rgba(255, 255, 255, 0.95)', 
+            backdropFilter: 'blur(8px)',
+            color: '#1f2937', 
+            padding: '12px', 
+            borderRadius:'12px', 
+            minWidth: '180px', 
+            textAlign: 'center', 
+            border: `2px solid ${statusColor}`, 
+            boxShadow: '0 10px 30px rgba(0,0,0,0.4)', 
+            fontFamily: 'Inter, sans-serif' 
+          }}>
+            <div style={{fontWeight:'bold', fontSize:'11px', color:'#64748b', textTransform:'uppercase', letterSpacing:'1px'}}>{data.name}</div>
             
             {isSimulationMode ? (
-                <div style={{margin:'5px 0'}}>
-                    <label style={{fontSize:'9px', display:'block', color:'#a855f7'}}>Simülasyon Değeri:</label>
-                    <input type="number" defaultValue={data.value} style={{width:'80%', padding:'2px', border:'1px solid #a855f7', borderRadius:'4px', textAlign:'center', fontWeight:'bold'}} onChange={(e) => onSimulateValue(data.id, parseFloat(e.target.value))} />
+                <div style={{margin:'8px 0'}}>
+                    <label style={{fontSize:'10px', display:'block', color:'#a855f7', fontWeight:'bold'}}>SET SIM VALUE:</label>
+                    <input type="number" defaultValue={data.value} style={{width:'80%', padding:'5px', border:'2px solid #a855f7', borderRadius:'6px', textAlign:'center', fontWeight:'bold'}} onChange={(e) => onSimulateValue(data.id, parseFloat(e.target.value))} />
                 </div>
             ) : (
-                <div style={{fontSize:'20px', fontWeight:'bold', margin:'2px 0', color:'#111827'}}>{formatValue(data.value)}</div>
+                <>
+                  <div style={{fontSize:'28px', fontWeight:'800', margin:'4px 0', color:'#0f172a'}}>{formatValue(data.value)}</div>
+                  <div style={{fontSize:'12px', color:'#ef4444', marginBottom:'8px', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'center', gap:'4px'}}>
+                    <span style={{fontSize:'16px'}}>⏱</span> {formatTimestamp(data.timestamp)}
+                  </div>
+                </>
             )}
 
-            <div style={{fontSize:'9px', color:'#9ca3af', marginBottom:'6px'}}>{data.location_name}</div>
+            <div style={{fontSize:'10px', color:'#94a3b8', background:'#f1f5f9', padding:'4px', borderRadius:'4px'}}>{data.location_name}</div>
             
             {isEditMode && !isSimulationMode && (
-              <div style={{marginTop:'5px', borderTop:'1px solid #e5e7eb', paddingTop:'5px'}}>
-                <select style={{background: '#f3f4f6', color:'#1f2937', fontSize:'10px', width:'100%', padding:'3px', borderRadius:'4px', border:'1px solid #d1d5db'}} value={data.location_name} onChange={(e) => onUpdateLocation(data.id, e.target.value)}>
+              <div style={{marginTop:'10px', borderTop:'1px solid #e2e8f0', paddingTop:'8px'}}>
+                <select style={{background: '#ffffff', color:'#1f2937', fontSize:'11px', width:'100%', padding:'5px', borderRadius:'6px', border:'1px solid #cbd5e1'}} value={data.location_name} onChange={(e) => onUpdateLocation(data.id, e.target.value)}>
                   {availableSlots.map((slot: string) => <option key={slot} value={slot}>{slot}</option>)}
                 </select>
               </div>
             )}
-            <button onClick={() => setShowPopup(false)} style={{marginTop:'6px', fontSize:'10px', background:'#ef4444', color:'white', border:'none', borderRadius:'4px', padding:'4px 8px', cursor:'pointer', width:'100%', fontWeight:'bold'}}>CLOSE</button>
+            <button onClick={() => setShowPopup(false)} style={{marginTop:'10px', fontSize:'11px', background:'#334155', color:'white', border:'none', borderRadius:'6px', padding:'8px', cursor:'pointer', width:'100%', fontWeight:'bold', letterSpacing:'1px'}}>CLOSE</button>
           </div>
         </Html>
       )}
-      {indexOffset > 0 && (<mesh position={[-indexOffset * 1.5, -data.position.y/2, -indexOffset * 0.5]}><cylinderGeometry args={[0.02, 0.02, data.position.y, 4]} /><meshStandardMaterial color={color} opacity={0.6} transparent /></mesh>)}
+
+      {/* Ofsetli sensör hattı */}
+      {indexOffset > 0 && (
+        <mesh position={[-indexOffset * 1.5, -data.position.y/2, -indexOffset * 0.5]}>
+          <cylinderGeometry args={[0.02, 0.02, data.position.y, 4]} />
+          <meshStandardMaterial color={statusColor} opacity={0.3} transparent />
+        </mesh>
+      )}
     </group>
   );
 };
