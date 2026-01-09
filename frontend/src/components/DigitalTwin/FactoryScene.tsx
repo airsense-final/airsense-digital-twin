@@ -6,6 +6,7 @@ import axios from "axios";
 import { FactoryArchitecture } from "./FactoryArchitecture";
 import { HeatmapLayer } from "./HeatmapLayer";
 import { SensorNode } from "./SensorNode";
+import layoutConfig from "../../../../backend/models/sensor-layouts/default.json";
 
 const getQueryParams = () => {
   const params = new URLSearchParams(window.location.search);
@@ -62,7 +63,7 @@ export const FactoryScene = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSimulationMode, setIsSimulationMode] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
-  
+
   // --- YENI: SAAT ICIN STATE ---
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -166,16 +167,25 @@ export const FactoryScene = () => {
             setSensors((prevSensors) => {
               return prevSensors.map((sensor) => {
                 const match = message.data.find((u: any) => {
-                  const incomingId = u.metadata?.sensor_id || u.sensor_id || u._id;
+                  const incomingId =
+                    u.metadata?.sensor_id || u.sensor_id || u._id;
                   return String(incomingId) === String(sensor.id);
                 });
 
                 if (match) {
-                  const newVal = match.value ?? match.latest_value ?? match.current_value;
+                  const newVal =
+                    match.value ?? match.latest_value ?? match.current_value;
                   const newTimestamp = match.timestamp;
 
-                  if (newVal !== sensor.value || newTimestamp !== sensor.timestamp) {
-                    return { ...sensor, value: newVal, timestamp: newTimestamp };
+                  if (
+                    newVal !== sensor.value ||
+                    newTimestamp !== sensor.timestamp
+                  ) {
+                    return {
+                      ...sensor,
+                      value: newVal,
+                      timestamp: newTimestamp,
+                    };
                   }
                 }
                 return sensor;
@@ -204,18 +214,39 @@ export const FactoryScene = () => {
     newLocation: string
   ) => {
     try {
-      await axios.post(
+      const response = await axios.post(
         "http://127.0.0.1:8001/api/map-sensor",
         { sensor_id: sensorId, location_key: newLocation },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setSensors((prev) =>
-        prev.map((s) =>
-          s.id === sensorId ? { ...s, location_name: newLocation } : s
-        )
-      );
+
+      if (response.status === 200) {
+        // HATA BURADAYDI: Tipi 'any' veya tam anahtar listesi olarak zorluyoruz
+        const mountingPoints = layoutConfig.mounting_points as any;
+        const newCoords = mountingPoints[newLocation];
+
+        setSensors((prevSensors) => {
+          return prevSensors.map((sensor) => {
+            if (String(sensor.id) === String(sensorId)) {
+              return {
+                ...sensor,
+                location_name: newLocation,
+                position: newCoords
+                  ? {
+                      x: newCoords.x,
+                      y: newCoords.y,
+                      z: newCoords.z,
+                    }
+                  : sensor.position,
+              };
+            }
+            return sensor;
+          });
+        });
+        console.log(`✅ Sensör 3D sahnede ${newLocation} noktasına taşındı.`);
+      }
     } catch (e) {
-      alert("Error updating location.");
+      console.error("Güncelleme hatası:", e);
     }
   };
 
@@ -275,7 +306,6 @@ export const FactoryScene = () => {
           </span>
         </h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          
           {/* SAAT BILEŞENI (Butonlardan hemen önce, sağ üst grup içinde) */}
           <div
             style={{
@@ -288,7 +318,7 @@ export const FactoryScene = () => {
               fontSize: "16px",
               fontWeight: "bold",
               marginRight: "10px",
-              letterSpacing: "1px"
+              letterSpacing: "1px",
             }}
           >
             {currentTime.toLocaleTimeString([], { hour12: false })}
@@ -379,7 +409,6 @@ export const FactoryScene = () => {
             castShadow
           />
           <pointLight position={[0, 18, 0]} intensity={0.5} />
-
           <KeyboardMapMover controlsRef={controlsRef} />
           <MapControls
             ref={controlsRef}
@@ -388,7 +417,6 @@ export const FactoryScene = () => {
             minDistance={5}
             maxDistance={90}
           />
-
           <FactoryArchitecture />
           <HeatmapLayer sensors={sensors} visible={showHeatmap} />
           <ContactShadows
@@ -399,7 +427,7 @@ export const FactoryScene = () => {
             far={10}
             color="#000000"
           />
-
+          // FactoryScene.tsx içinde getOffset kullanımını değiştiriyoruz
           {sensors.map((s) => (
             <SensorNode
               key={s.id}
@@ -409,6 +437,7 @@ export const FactoryScene = () => {
               onSimulateValue={handleSimulateValue}
               isEditMode={isEditMode}
               isSimulationMode={isSimulationMode}
+              // Offset miktarını sadece Y ekseninde (yukarı/aşağı) kullanmak için gönderiyoruz
               indexOffset={getOffset(s.location_name)}
             />
           ))}

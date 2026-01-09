@@ -26,27 +26,27 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
   if (isSimulationMode) statusColor = "#a855f7"; 
 
   const [showPopup, setShowPopup] = useState(false);
-  const adjustedX = data.position.x + (indexOffset * 1.5); 
-  const adjustedZ = data.position.z + (indexOffset * 0.5);
+
+  // --- DÜZELTME: Çakışmayı önlemek için X/Z yerine Y (Yükseklik) eksenini kaydırıyoruz ---
+  // Ana montaj noktası (data.position.y) üzerine her sensör için 1.2 birim ekliyoruz
+  const verticalGap = 1.2;
+  const adjustedY = data.position.y + (indexOffset * verticalGap);
 
   return (
-    <group position={[adjustedX, data.position.y, adjustedZ]}>
+    <group position={[data.position.x, adjustedY, data.position.z]}>
       
-      {/* 1. SENSÖR ANA GÖVDESİ (Endüstriyel Kasa) */}
+      {/* 1. SENSÖR ANA GÖVDESİ */}
       <group onClick={() => setShowPopup(!showPopup)}>
-        {/* Ana Şasi */}
         <mesh castShadow>
           <boxGeometry args={[1.2, 0.7, 1.2]} />
           <meshStandardMaterial color="#334155" roughness={0.4} metalness={0.7} />
         </mesh>
 
-        {/* Ön Panel / Ekran Alanı */}
         <mesh position={[0, 0, 0.61]}>
           <boxGeometry args={[0.9, 0.4, 0.05]} />
           <meshStandardMaterial color="#1e293b" metalness={0.9} roughness={0.1} />
         </mesh>
 
-        {/* Durum LED'i (Parlayan Işık) */}
         <mesh position={[0.4, 0.2, 0.62]}>
           <sphereGeometry args={[0.08, 16, 16]} />
           <meshStandardMaterial 
@@ -56,7 +56,6 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
           />
         </mesh>
 
-        {/* IoT Anteni */}
         <mesh position={[-0.4, 0.35, -0.4]}>
           <cylinderGeometry args={[0.03, 0.03, 0.8, 8]} />
           <meshStandardMaterial color="#1f2937" metalness={1} />
@@ -68,19 +67,20 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
       </group>
 
       {/* 2. MONTAJ APARATI VE DİREK */}
-      {/* Bağlantı Kafası */}
       <mesh position={[0, -0.45, 0]}>
         <cylinderGeometry args={[0.2, 0.3, 0.2, 16]} />
         <meshStandardMaterial color="#475569" metalness={0.8} />
       </mesh>
 
-      {/* Ana Direk (Daha ince ve metalik) */}
-      <mesh position={[0, -data.position.y / 2 - 0.5, 0]} castShadow>
-          <cylinderGeometry args={[0.07, 0.07, data.position.y, 12]} />
+      {/* Ana Direk Uzunluğu: 
+         Sensör yükseldikçe direk zemine kadar uzanmalı. 
+         Direği sensörün bulunduğu yükseklikten zemine (0 noktasına) kadar çiziyoruz.
+      */}
+      <mesh position={[0, -adjustedY / 2 - 0.5, 0]} castShadow>
+          <cylinderGeometry args={[0.07, 0.07, adjustedY, 12]} />
           <meshStandardMaterial color="#94a3b8" metalness={0.9} roughness={0.2} />
       </mesh>
 
-      {/* Üst Bilgi Yazısı */}
       <Text 
         position={[0, 1.8, 0]} 
         fontSize={0.6} 
@@ -94,7 +94,7 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
           {data.type ? data.type.split(" ")[0].toUpperCase() : "IOT NODE"}
       </Text>
 
-      {/* 3. POPUP UI (Tasarımı modernize edildi) */}
+      {/* 3. POPUP UI */}
       {showPopup && (
         <Html position={[0, 2.5, 0]} center zIndexRange={[100, 0]}>
           <div style={{ 
@@ -139,11 +139,11 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
         </Html>
       )}
 
-      {/* Ofsetli sensör hattı */}
+      {/* Üst üste binen sensörler için görsel destek hattı (isteğe bağlı) */}
       {indexOffset > 0 && (
-        <mesh position={[-indexOffset * 1.5, -data.position.y/2, -indexOffset * 0.5]}>
-          <cylinderGeometry args={[0.02, 0.02, data.position.y, 4]} />
-          <meshStandardMaterial color={statusColor} opacity={0.3} transparent />
+        <mesh position={[0, -(indexOffset * verticalGap) / 2, 0]}>
+          <cylinderGeometry args={[0.08, 0.08, indexOffset * verticalGap, 8]} />
+          <meshStandardMaterial color={statusColor} opacity={0.5} transparent />
         </mesh>
       )}
     </group>
