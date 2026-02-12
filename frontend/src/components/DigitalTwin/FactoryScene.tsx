@@ -1,12 +1,161 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { MapControls, ContactShadows } from "@react-three/drei";
+import { MapControls, ContactShadows, Cylinder } from "@react-three/drei";
 import axios from "axios";
 
 import { FactoryArchitecture } from "./FactoryArchitecture";
 import { HeatmapLayer } from "./HeatmapLayer";
 import { SensorNode } from "./SensorNode";
 import layoutConfig from "../../../../backend/models/sensor-layouts/default.json";
+import { Float, Sphere } from "@react-three/drei";
+
+import { useSimulation } from "../../hooks/useSimulation";
+import { SimulationPanel } from "./SimulationPanel";
+
+const DigitalClock = () => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div
+      style={{
+        background: "#1e293b",
+        color: "#38bdf8",
+        padding: "8px 15px",
+        borderRadius: "6px",
+        border: "1px solid #334155",
+        fontFamily: "monospace",
+        fontSize: "16px",
+        fontWeight: "bold",
+        marginRight: "10px",
+        letterSpacing: "1px",
+      }}
+    >
+      {currentTime.toLocaleTimeString([], { hour12: false })}
+    </div>
+  );
+};
+
+// --- ANİMASYONLU, YAYILAN GERÇEKÇİ YANGIN VE DUMAN EFEKTİ ---
+const FireEffect = ({ position }: { position: { x: number; y: number; z: number } }) => {
+  const smokeRefs = useRef<any[]>([]);
+  const fireRef = useRef<any>(null);
+  const lightRef = useRef<any>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (fireRef.current) {
+      fireRef.current.scale.y = 1 + Math.sin(t * 15) * 0.2 + Math.cos(t * 10) * 0.1;
+      fireRef.current.scale.x = 1 + Math.cos(t * 8) * 0.1;
+      fireRef.current.scale.z = 1 + Math.sin(t * 7) * 0.1;
+    }
+    if (lightRef.current) {
+      lightRef.current.intensity = 40 + Math.sin(t * 25) * 15;
+    }
+    smokeRefs.current.forEach((mesh, i) => {
+      if (!mesh) return;
+      const lifeTime = 6;
+      const timeOffset = t + (i * (lifeTime / smokeRefs.current.length));
+      const life = timeOffset % lifeTime;
+      const progress = life / lifeTime;
+      mesh.position.y = 1 + (progress * 15); 
+      const spread = 2 + (Math.pow(progress, 2) * 25);
+      mesh.scale.set(spread, spread * 0.5, spread);
+      if (mesh.material) {
+        mesh.material.opacity = (1 - progress) * 0.6;
+      }
+    });
+  });
+
+  return (
+    <group position={[position.x, 0, position.z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 0]}>
+        <circleGeometry args={[2.5, 32]} />
+        <meshStandardMaterial color="#ff3300" emissive="#ff2200" emissiveIntensity={6} transparent opacity={0.9} />
+      </mesh>
+      <group ref={fireRef} position={[0, 1.5, 0]}>
+        <Sphere args={[1.5, 16, 16]} scale={[1, 2, 1]}>
+          <meshStandardMaterial color="#fffb00" emissive="#ffaa00" emissiveIntensity={10} transparent opacity={0.8} depthWrite={false} />
+        </Sphere>
+        <Sphere args={[2.2, 16, 16]} position={[0, 0.5, 0]} scale={[1, 1.5, 1]}>
+          <meshStandardMaterial color="#ff4400" emissive="#ff0000" emissiveIntensity={5} transparent opacity={0.6} depthWrite={false} />
+        </Sphere>
+      </group>
+      {[...Array(7)].map((_, i) => (
+        <Sphere 
+          key={i} 
+          ref={(el) => { smokeRefs.current[i] = el; }} 
+          args={[1, 16, 16]} 
+          position={[0, 0, 0]}
+        >
+          <meshStandardMaterial color="#0a0a0a" transparent opacity={0} depthWrite={false} roughness={1} />
+        </Sphere>
+      ))}
+      <pointLight ref={lightRef} position={[0, 3, 0]} color="#ff3300" distance={60} castShadow />
+    </group>
+  );
+};
+
+const GasLeakEffect = ({ position }: { position: { x: number; y: number; z: number } }) => {
+  const jetRefs = useRef<any[]>([]);
+  const floorRefs = useRef<any[]>([]);
+  const PIPE_HEIGHT = 18; 
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    jetRefs.current.forEach((mesh, i) => {
+      if (!mesh) return;
+      const lifeTime = 1.4; 
+      const offset = i * (lifeTime / jetRefs.current.length);
+      const progress = ((t + offset) % lifeTime) / lifeTime;
+      mesh.position.y = PIPE_HEIGHT - (progress * PIPE_HEIGHT); 
+      const spread = 0.5 + (progress * 4.5); 
+      mesh.position.x = Math.sin(i * 132.5) * (progress * 2.5);
+      mesh.position.z = Math.cos(i * 123.5) * (progress * 2.5);
+      mesh.scale.set(spread, spread * 1.5, spread);
+      if (mesh.material) mesh.material.opacity = (1 - progress) * 0.7;
+    });
+    floorRefs.current.forEach((mesh, i) => {
+        if (!mesh) return;
+        const lifeTime = 4.0;
+        const offset = i * (lifeTime / floorRefs.current.length);
+        const progress = ((t + offset) % lifeTime) / lifeTime;
+        mesh.position.y = 0.3; 
+        const radius = progress * 12; 
+        const angle = i * (Math.PI * 2 / floorRefs.current.length);
+        mesh.position.x = Math.cos(angle) * radius;
+        mesh.position.z = Math.sin(angle) * radius;
+        const scale = 5 + (progress * 7);
+        mesh.scale.set(scale, scale * 0.2, scale);
+        if (mesh.material) mesh.material.opacity = (1 - progress) * 0.5;
+    });
+  });
+
+  return (
+    <group position={[position.x, 0, position.z]}>
+      <mesh position={[0, PIPE_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.8, 0.2, 16, 32]} />
+        <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={5} />
+      </mesh>
+      {[...Array(20)].map((_, i) => (
+        <Sphere key={`jet-${i}`} ref={(el) => { jetRefs.current[i] = el; }} args={[0.7, 16, 16]}>
+          <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={1} transparent opacity={0} depthWrite={false} />
+        </Sphere>
+      ))}
+      {[...Array(15)].map((_, i) => (
+        <Sphere key={`floor-${i}`} ref={(el) => { floorRefs.current[i] = el; }} args={[1.2, 32, 32]}>
+          <meshStandardMaterial color="#10b981" emissive="#064e3b" emissiveIntensity={0.2} transparent opacity={0} depthWrite={false} />
+        </Sphere>
+      ))}
+      <spotLight position={[0, PIPE_HEIGHT + 1, 0]} target-position={[0, 0, 0]} color="#00ff88" intensity={150} distance={40} angle={0.7} />
+    </group>
+  );
+};
 
 const getQueryParams = () => {
   const params = new URLSearchParams(window.location.search);
@@ -21,10 +170,8 @@ const KeyboardMapMover = ({ controlsRef }: { controlsRef: any }) => {
   const { camera } = useThree();
   const [keys, setKeys] = useState<{ [key: string]: boolean }>({});
   useEffect(() => {
-    const down = (e: KeyboardEvent) =>
-      setKeys((k) => ({ ...k, [e.code]: true }));
-    const up = (e: KeyboardEvent) =>
-      setKeys((k) => ({ ...k, [e.code]: false }));
+    const down = (e: KeyboardEvent) => setKeys((k) => ({ ...k, [e.code]: true }));
+    const up = (e: KeyboardEvent) => setKeys((k) => ({ ...k, [e.code]: false }));
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     return () => {
@@ -56,43 +203,54 @@ const KeyboardMapMover = ({ controlsRef }: { controlsRef: any }) => {
   return null;
 };
 
+// --- YENİ: SİREN BİLEŞENİ ---
+const SirenStrobe = () => {
+  const lightRef = useRef<any>(null);
+  useFrame(({ clock }) => {
+    if (lightRef.current) {
+      // Tehlike anı çakar efekti (Hızlı yanıp sönen kırmızı ışık)
+      lightRef.current.intensity = Math.sin(clock.getElapsedTime() * 15) > 0 ? 30 : 0;
+    }
+  });
+  return (
+    <group>
+      <pointLight ref={lightRef} color="#ff0000" position={[0, 18, 0]} distance={150} />
+      <pointLight ref={lightRef} color="#ff0000" position={[40, 18, 40]} distance={100} />
+      <pointLight ref={lightRef} color="#ff0000" position={[-40, 18, -40]} distance={100} />
+    </group>
+  );
+};
+
 export const FactoryScene = () => {
-  const [sensors, setSensors] = useState<any[]>([]);
+  const [sensors, setSensors] = useState<any[]>([]); 
   const [companies, setCompanies] = useState<any[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [isSimulationMode, setIsSimulationMode] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
 
-  // --- YENI: SAAT ICIN STATE ---
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const {
+    isSimulating,
+    simSensors,
+    simMode,
+    simCenter,
+    startSimulation,
+    stopSimulation,
+    addVirtualSensor,
+    removeVirtualSensor,
+    runScenario,
+  } = useSimulation(sensors);
+
+  const displaySensors = isSimulating ? simSensors : sensors;
 
   const controlsRef = useRef<any>(null);
   const { token, role, userCompany } = getQueryParams();
   const [selectedCompany, setSelectedCompany] = useState<string>(
-    userCompany || ""
+    userCompany || "",
   );
-
-  // --- YENI: SAAT GUNCELLEME MEKANIZMASI ---
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   if (!token)
     return (
-      <div
-        style={{
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "white",
-          background: "#0f172a",
-        }}
-      >
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "white", background: "#0f172a" }}>
         <h1>⛔ Access Denied</h1>
       </div>
     );
@@ -121,11 +279,7 @@ export const FactoryScene = () => {
           {
             headers: { Authorization: `Bearer ${token}` },
             params: params,
-          }
-        );
-        console.log(
-          "📍 Yüklenen Sensörler:",
-          res.data.map((s: any) => s.id)
+          },
         );
         setSensors(res.data);
       } catch (e) {
@@ -151,16 +305,12 @@ export const FactoryScene = () => {
           ? `&company=${encodeURIComponent(selectedCompany)}`
           : "";
       const wsUrl = `ws://127.0.0.1:8001/ws?token=${encodeURIComponent(
-        token
+        token,
       )}${companyParam}`;
 
       ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => console.log("✅ WebSocket Bağlandı: Canlı akış aktif");
-
       ws.onmessage = (event) => {
-        if (isSimulationMode) return;
-
         try {
           const message = JSON.parse(event.data);
           if (message.type === "SENSOR_UPDATE" && Array.isArray(message.data)) {
@@ -197,31 +347,26 @@ export const FactoryScene = () => {
         }
       };
 
-      ws.onerror = (err) => console.error("🔌 WebSocket Hatası:", err);
-      ws.onclose = () => console.log("🔌 WebSocket Bağlantısı Kesildi");
-
       return () => {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          console.log("🧹 WebSocket temizleniyor...");
           ws.close();
         }
       };
     }
-  }, [selectedCompany, token, role, isSimulationMode]);
+  }, [selectedCompany, token, role]);
 
   const handleUpdateLocation = async (
     sensorId: string,
-    newLocation: string
+    newLocation: string,
   ) => {
     try {
       const response = await axios.post(
         "http://127.0.0.1:8001/api/map-sensor",
         { sensor_id: sensorId, location_key: newLocation },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (response.status === 200) {
-        // HATA BURADAYDI: Tipi 'any' veya tam anahtar listesi olarak zorluyoruz
         const mountingPoints = layoutConfig.mounting_points as any;
         const newCoords = mountingPoints[newLocation];
 
@@ -243,7 +388,6 @@ export const FactoryScene = () => {
             return sensor;
           });
         });
-        console.log(`✅ Sensör 3D sahnede ${newLocation} noktasına taşındı.`);
       }
     } catch (e) {
       console.error("Güncelleme hatası:", e);
@@ -252,7 +396,7 @@ export const FactoryScene = () => {
 
   const handleSimulateValue = (sensorId: string, newValue: number) => {
     setSensors((prev) =>
-      prev.map((s) => (s.id === sensorId ? { ...s, value: newValue } : s))
+      prev.map((s) => (s.id === sensorId ? { ...s, value: newValue } : s)),
     );
   };
 
@@ -263,6 +407,15 @@ export const FactoryScene = () => {
     return offset;
   };
 
+  const toggleSimulation = () => {
+    if (isSimulating) {
+      stopSimulation();
+    } else {
+      startSimulation();
+      setIsEditMode(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -271,6 +424,7 @@ export const FactoryScene = () => {
         display: "flex",
         flexDirection: "column",
         background: "#0f172a",
+        position: "relative",
       }}
     >
       <div
@@ -306,31 +460,12 @@ export const FactoryScene = () => {
           </span>
         </h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          {/* SAAT BILEŞENI (Butonlardan hemen önce, sağ üst grup içinde) */}
-          <div
-            style={{
-              background: "#1e293b",
-              color: "#38bdf8",
-              padding: "8px 15px",
-              borderRadius: "6px",
-              border: "1px solid #334155",
-              fontFamily: "monospace",
-              fontSize: "16px",
-              fontWeight: "bold",
-              marginRight: "10px",
-              letterSpacing: "1px",
-            }}
-          >
-            {currentTime.toLocaleTimeString([], { hour12: false })}
-          </div>
+          <DigitalClock />
 
           <button
-            onClick={() => {
-              setIsSimulationMode(!isSimulationMode);
-              setIsEditMode(false);
-            }}
+            onClick={toggleSimulation}
             style={{
-              background: isSimulationMode ? "#9333ea" : "#1e293b",
+              background: isSimulating ? "#9333ea" : "#1e293b",
               color: "white",
               border: "1px solid #334155",
               padding: "8px 20px",
@@ -339,7 +474,7 @@ export const FactoryScene = () => {
               fontWeight: "bold",
             }}
           >
-            {isSimulationMode ? "🧪 SIMULATION ACTIVE" : "🧪 SIMULATION"}
+            {isSimulating ? "🛑 STOP SIMULATION" : "🧪 SIMULATION"}
           </button>
           <button
             onClick={() => setShowHeatmap(!showHeatmap)}
@@ -358,7 +493,7 @@ export const FactoryScene = () => {
           <button
             onClick={() => {
               setIsEditMode(!isEditMode);
-              setIsSimulationMode(false);
+              if (isSimulating) stopSimulation();
             }}
             style={{
               background: isEditMode ? "#2563eb" : "#1e293b",
@@ -395,40 +530,87 @@ export const FactoryScene = () => {
       </div>
 
       <div style={{ flex: 1, position: "relative" }}>
-        <Canvas shadows camera={{ position: [20, 25, 30], fov: 45 }}>
+        {/* --- YENİ: MERKEZİ UYARI UI --- */}
+        {isSimulating && simMode !== 'NORMAL' && (
+          <div style={{
+            position: 'absolute', top: '15%', left: '50%', transform: 'translate(-50%, -50%)',
+            zIndex: 100, background: 'rgba(220, 38, 38, 0.85)',
+            color: 'white', padding: '20px 40px', borderRadius: '12px',
+            fontSize: '28px', fontWeight: 'bold', border: '3px solid white',
+            boxShadow: '0 0 20px rgba(255,0,0,0.5)', pointerEvents: 'none', textAlign: 'center'
+          }}>
+            🚨 EMERGENCY: {simMode} DETECTED! 🚨
+            <div style={{ fontSize: '14px', marginTop: '5px' }}>Immediate Action Required In Affected Zones</div>
+          </div>
+        )}
+
+        {/* --- YENİ: KRİTİK SENSÖR LİSTESİ UI --- */}
+        {isSimulating && displaySensors.some(s => s.status === 'critical') && (
+          <div style={{
+            position: 'absolute', right: '20px', top: '100px', zIndex: 100,
+            background: 'rgba(15, 23, 42, 0.9)', padding: '15px',
+            borderRadius: '8px', border: '2px solid #ef4444', width: '220px'
+          }}>
+            <h4 style={{ color: '#ef4444', margin: '0 0 10px 0', borderBottom: '1px solid #ef4444', paddingBottom: '5px' }}>⚠️ CRITICAL NODES</h4>
+            {displaySensors.filter(s => s.status === 'critical').map(s => (
+              <div key={s.id} style={{ color: 'white', fontSize: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{s.name}:</span>
+                <b style={{ color: '#f87171' }}>{s.value?.toFixed(1)}</b>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isSimulating && (
+          <SimulationPanel
+            sensors={displaySensors}
+            onAdd={(type) => addVirtualSensor(type)}
+            onRemove={removeVirtualSensor}
+            onScenario={runScenario}
+          />
+        )}
+        <Canvas
+          shadows
+          camera={{ position: [20, 25, 30], fov: 45 }}
+          frameloop="always"
+        >
           <color attach="background" args={["#e5e7eb"]} />
           <fog attach="fog" args={["#e5e7eb", 40, 180]} />
-          <hemisphereLight
-            intensity={0.8}
-            groundColor="#d1d5db"
-            color="#ffffff"
-          />
-          <directionalLight
-            position={[50, 80, 50]}
-            intensity={1.5}
-            castShadow
-          />
+          
+          {/* TEHLİKE ANINDA ANA IŞIKLARI LOŞLAŞTIR */}
+          <hemisphereLight intensity={isSimulating && simMode !== 'NORMAL' ? 0.3 : 0.8} groundColor="#d1d5db" color="#ffffff" />
+          <directionalLight position={[50, 80, 50]} intensity={isSimulating && simMode !== 'NORMAL' ? 0.5 : 1.5} castShadow />
+          
+          {/* YENİ: TEHLİKE ANINDA ÇAKAN SİREN IŞIKLARI */}
+          {isSimulating && simMode !== 'NORMAL' && <SirenStrobe />}
+
           <pointLight position={[0, 18, 0]} intensity={0.5} />
           <KeyboardMapMover controlsRef={controlsRef} />
-          <MapControls
-            ref={controlsRef}
-            screenSpacePanning={true}
-            dampingFactor={0.05}
-            minDistance={5}
-            maxDistance={90}
-          />
+          <MapControls ref={controlsRef} makeDefault screenSpacePanning={true} dampingFactor={0.1} minDistance={5} maxDistance={90} />
+
+          {isSimulating && (simMode === "FIRE" || simMode === "GAS_LEAK") && (
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, 0.1, 0]}
+              onDoubleClick={(e: any) => {
+                e.stopPropagation(); 
+                runScenario(simMode, { x: e.point.x, y: 0.5, z: e.point.z });
+              }}
+            >
+              <planeGeometry args={[500, 500]} />
+              <meshBasicMaterial visible={false} />
+            </mesh>
+          )}
+
           <FactoryArchitecture />
-          <HeatmapLayer sensors={sensors} visible={showHeatmap} />
-          <ContactShadows
-            resolution={1024}
-            scale={150}
-            blur={3}
-            opacity={0.4}
-            far={10}
-            color="#000000"
-          />
-          // FactoryScene.tsx içinde getOffset kullanımını değiştiriyoruz
-          {sensors.map((s) => (
+          <HeatmapLayer sensors={displaySensors} visible={showHeatmap} />
+
+          {isSimulating && simCenter && simMode === "FIRE" && <FireEffect position={simCenter} />}
+          {isSimulating && simCenter && simMode === "GAS_LEAK" && <GasLeakEffect position={simCenter} />}
+
+          <ContactShadows resolution={1024} scale={150} blur={3} opacity={0.4} far={10} color="#000000" />
+
+          {displaySensors.map((s) => (
             <SensorNode
               key={s.id}
               data={s}
@@ -436,13 +618,11 @@ export const FactoryScene = () => {
               onUpdateLocation={handleUpdateLocation}
               onSimulateValue={handleSimulateValue}
               isEditMode={isEditMode}
-              isSimulationMode={isSimulationMode}
-              // Offset miktarını sadece Y ekseninde (yukarı/aşağı) kullanmak için gönderiyoruz
+              isSimulationMode={isSimulating}
               indexOffset={getOffset(s.location_name)}
             />
           ))}
         </Canvas>
-
         <div
           style={{
             position: "absolute",
@@ -458,6 +638,7 @@ export const FactoryScene = () => {
         >
           🎮 <b>Controls:</b>
           <br />• Left Click: Pan | Right Click: Rotate
+          <br />• Double Click: Move Fire/Gas Leak (In Simulation)
           <br />• WASD: Move | Shift: Fast
         </div>
       </div>

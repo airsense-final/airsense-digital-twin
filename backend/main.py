@@ -67,7 +67,7 @@ def read_root():
     return {"status": "Digital Twin Engine ONLINE", "db": "SQLite"}
 
 @app.get("/api/digital-twin-data")
-def get_digital_twin_data(authorization: str = Header(None), company: str = Query(None)):
+async def get_digital_twin_data(authorization: str = Header(None), company: str = Query(None)):
     token = ""
     if authorization:
         clean_auth = authorization.strip()
@@ -89,37 +89,37 @@ def get_digital_twin_data(authorization: str = Header(None), company: str = Quer
             mounting_points = data.get("mounting_points", {})
     except: pass
 
-    sensors_metadata = adapter.get_sensors_metadata(token, target_comp)
-    live_values = adapter.get_live_values(token, target_comp)
+    # PERFORMANS DÜZELTMESİ: Verileri sırayla beklemek yerine aynı anda çekiyoruz
+    # asyncio.gather kullanarak iki isteği tek seferde yola çıkarıyoruz.
+    sensors_metadata_task = adapter.get_sensors_metadata(token, target_comp)
+    live_values_task = adapter.get_live_values(token, target_comp)
+    
+    # İki görev de aynı anda çalışır, en uzunu kadar sürer (toplamları kadar değil)
+    sensors_metadata, live_values = await asyncio.gather(sensors_metadata_task, live_values_task)
+    
     saved_mappings = load_mappings_from_db()
-
-    # main.py içindeki get_digital_twin_data fonksiyonundaki live_map döngüsünü bununla değiştir:
 
     live_map = {}
     for item in live_values:
-        # JSON yapısına göre ID metadata içindedir
         metadata = item.get("metadata", {})
         s_id = None
-        
         if isinstance(metadata, dict):
             s_id = metadata.get("sensor_id")
-        
-        # Eğer metadata'da yoksa ana objeye bak
         if not s_id:
             s_id = item.get("sensor_id") or item.get("_id")
 
         val = item.get("value")
         if val is None:
             val = item.get("latest_value") or item.get("current_value") or 0
-            
         if s_id:
-            live_map[str(s_id)] = val # Eşleşme garantisi için string
+            live_map[str(s_id)] = val
 
     mapped_results = []
     available_slots = list(mounting_points.keys()) 
     used_slots = set()
     processed_ids = set()
 
+    # Orijinal eşleştirme döngülerin (mantık hiç bozulmadı)
     for sensor in sensors_metadata:
         s_id = str(sensor.get("sensor_id"))
         api_raw_loc = str(sensor.get("location", "unknown")).lower()
@@ -159,13 +159,14 @@ def get_digital_twin_data(authorization: str = Header(None), company: str = Quer
     return mapped_results
 
 @app.post("/api/map-sensor")
-def map_sensor_to_location(data: MapRequest, authorization: str = Header(None)):
+async def map_sensor_to_location(data: MapRequest, authorization: str = Header(None)):
     token = authorization.split(" ")[1] if authorization and " " in authorization else authorization
     try:
         save_mapping_to_db(data.sensor_id, data.location_key)
         sync_status = "Skipped"
         if token:
-            success = adapter.update_sensor_location(token, data.sensor_id, data.location_key)
+            # AWAIT eklendi
+            success = await adapter.update_sensor_location(token, data.sensor_id, data.location_key)
             sync_status = "Synced" if success else "Failed"
         return {"status": "success", "message": "Saved", "sync": sync_status}
     except Exception as e: return {"status": "error", "message": str(e)}
@@ -186,7 +187,9 @@ def get_layout_slots(company: str = Query(None)):
     except: return []
 
 @app.get("/api/companies")
-def get_companies_list(): return adapter.get_companies()
+async def get_companies_list(): 
+    # AWAIT eklendi
+    return await adapter.get_companies()
 
 @app.get("/api/room-config")
 def get_room_config():
@@ -202,7 +205,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), comp
     try:
         while True:
             try:
-                live_data = adapter.get_live_values(token=token, target_company=target_comp)
+                # Veriyi çek ve hemen gönder
+                live_data = await adapter.get_live_values(token=token, target_company=target_comp)
                 if live_data and len(live_data) > 0:
                     await websocket.send_json({
                         "type": "SENSOR_UPDATE", 
@@ -212,7 +216,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), comp
                 print(f"⚠️ İletişim koptu: {inner_e}")
                 break 
 
-            await asyncio.sleep(2)
+            await asyncio.sleep(1) 
 
     except WebSocketDisconnect:
         print("❌ İstemci tarayıcıyı kapattı.")
