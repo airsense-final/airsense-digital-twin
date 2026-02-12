@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo, useEffect, useRef } from 'react';
 import { Html, Text } from '@react-three/drei';
 
 const formatValue = (val: any) => {
@@ -6,29 +6,50 @@ const formatValue = (val: any) => {
     return val;
 };
 
-const formatTimestamp = (utcString: string) => {
-    if (!utcString) return "--:--:--";
-    try {
+// --- TİTREMEYİ VE SIÇRAMAYI ÖNLEYEN SAAT MOTORU ---
+const LiveTimestamp = ({ utcString }: { utcString: string }) => {
+    const [displayTime, setDisplayTime] = useState("--:--:--");
+    const timeRef = useRef<Date | null>(null);
+
+    useEffect(() => {
+        if (!utcString) return;
+        
         let normalizedStr = utcString;
         if (!normalizedStr.endsWith('Z') && !normalizedStr.includes('+')) normalizedStr += 'Z';
-        const date = new Date(normalizedStr);
-        const turkeyTime = new Date(date.getTime() + (3 * 60 * 60 * 1000));
-        return `${turkeyTime.getUTCHours().toString().padStart(2, '0')}:${turkeyTime.getUTCMinutes().toString().padStart(2, '0')}:${turkeyTime.getUTCSeconds().toString().padStart(2, '0')}`;
-    } catch (e) { return utcString; }
+        const newServerDate = new Date(new Date(normalizedStr).getTime() + (3 * 60 * 60 * 1000));
+
+        if (!timeRef.current || Math.abs(timeRef.current.getTime() - newServerDate.getTime()) > 2000) {
+            timeRef.current = newServerDate;
+        }
+    }, [utcString]);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            if (timeRef.current) {
+                timeRef.current = new Date(timeRef.current.getTime() + 1000);
+                setDisplayTime(
+                    `${timeRef.current.getUTCHours().toString().padStart(2, '0')}:${timeRef.current.getUTCMinutes().toString().padStart(2, '0')}:${timeRef.current.getUTCSeconds().toString().padStart(2, '0')}`
+                );
+            }
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
+
+    return <>{displayTime}</>;
 };
 
-export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateValue, isEditMode, isSimulationMode, indexOffset }: any) => {
-  // Durum rengi (Değere göre değişen LED rengi)
+// React.memo ile sarmaladık: Sadece verisi gerçekten değişen sensör render olur.
+export const SensorNode = memo(({ data, availableSlots, onUpdateLocation, onSimulateValue, isEditMode, isSimulationMode, indexOffset }: any) => {
+  const [showPopup, setShowPopup] = useState(false);
+
+  // Durum rengi hesaplamaları
   let statusColor = "#16a34a"; 
   if (data.value > 30) statusColor = "#facc15"; 
   if (data.value > 70) statusColor = "#dc2626"; 
   if (isEditMode && data.is_manual) statusColor = "#2563eb"; 
   if (isSimulationMode) statusColor = "#a855f7"; 
 
-  const [showPopup, setShowPopup] = useState(false);
-
-  // --- DÜZELTME: Çakışmayı önlemek için X/Z yerine Y (Yükseklik) eksenini kaydırıyoruz ---
-  // Ana montaj noktası (data.position.y) üzerine her sensör için 1.2 birim ekliyoruz
   const verticalGap = 1.2;
   const adjustedY = data.position.y + (indexOffset * verticalGap);
 
@@ -72,10 +93,6 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
         <meshStandardMaterial color="#475569" metalness={0.8} />
       </mesh>
 
-      {/* Ana Direk Uzunluğu: 
-         Sensör yükseldikçe direk zemine kadar uzanmalı. 
-         Direği sensörün bulunduğu yükseklikten zemine (0 noktasına) kadar çiziyoruz.
-      */}
       <mesh position={[0, -adjustedY / 2 - 0.5, 0]} castShadow>
           <cylinderGeometry args={[0.07, 0.07, adjustedY, 12]} />
           <meshStandardMaterial color="#94a3b8" metalness={0.9} roughness={0.2} />
@@ -113,14 +130,26 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
             
             {isSimulationMode ? (
                 <div style={{margin:'8px 0'}}>
+                    {/* DÜZELTME 1: Simülasyon modunda da değişen veriyi kocaman gösteriyoruz */}
+                    <div style={{fontSize:'28px', fontWeight:'800', margin:'4px 0', color:'#a855f7'}}>
+                        {formatValue(data.value)}
+                    </div>
+                    
                     <label style={{fontSize:'10px', display:'block', color:'#a855f7', fontWeight:'bold'}}>SET SIM VALUE:</label>
-                    <input type="number" defaultValue={data.value} style={{width:'80%', padding:'5px', border:'2px solid #a855f7', borderRadius:'6px', textAlign:'center', fontWeight:'bold'}} onChange={(e) => onSimulateValue(data.id, parseFloat(e.target.value))} />
+                    {/* DÜZELTME 2: defaultValue yerine value kullandık. Artık hep güncel! */}
+                    <input 
+                        type="number" 
+                        value={formatValue(data.value)} 
+                        style={{width:'80%', padding:'5px', border:'2px solid #a855f7', borderRadius:'6px', textAlign:'center', fontWeight:'bold'}} 
+                        onChange={(e) => onSimulateValue(data.id, parseFloat(e.target.value))} 
+                    />
                 </div>
             ) : (
                 <>
                   <div style={{fontSize:'28px', fontWeight:'800', margin:'4px 0', color:'#0f172a'}}>{formatValue(data.value)}</div>
                   <div style={{fontSize:'12px', color:'#ef4444', marginBottom:'8px', fontWeight:'600', display:'flex', alignItems:'center', justifyContent:'center', gap:'4px'}}>
-                    <span style={{fontSize:'16px'}}>⏱</span> {formatTimestamp(data.timestamp)}
+                    <span style={{fontSize:'16px'}}>⏱</span> 
+                    <LiveTimestamp utcString={data.timestamp} />
                   </div>
                 </>
             )}
@@ -139,7 +168,6 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
         </Html>
       )}
 
-      {/* Üst üste binen sensörler için görsel destek hattı (isteğe bağlı) */}
       {indexOffset > 0 && (
         <mesh position={[0, -(indexOffset * verticalGap) / 2, 0]}>
           <cylinderGeometry args={[0.08, 0.08, indexOffset * verticalGap, 8]} />
@@ -148,4 +176,14 @@ export const SensorNode = ({ data, availableSlots, onUpdateLocation, onSimulateV
       )}
     </group>
   );
-};
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.data.value === nextProps.data.value &&
+    prevProps.data.timestamp === nextProps.data.timestamp &&
+    prevProps.data.position.x === nextProps.data.position.x &&
+    prevProps.data.position.y === nextProps.data.position.y &&
+    prevProps.isEditMode === nextProps.isEditMode &&
+    prevProps.isSimulationMode === nextProps.isSimulationMode &&
+    prevProps.indexOffset === nextProps.indexOffset
+  );
+});

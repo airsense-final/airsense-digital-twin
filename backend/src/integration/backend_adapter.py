@@ -1,9 +1,12 @@
-import requests
+import httpx
 import json
 
 class BackendAdapter:
     def __init__(self):
         self.base_url = "http://127.0.0.1:8000" 
+        # PERFORMANS DÜZELTMESİ: Tek bir asenkron client oluşturuyoruz
+        # Bu sayede her seferinde yeni bağlantı kurma maliyetinden kurtuluyoruz.
+        self.client = httpx.AsyncClient(timeout=10.0)
 
     def _get_headers(self, token):
         return {
@@ -11,14 +14,15 @@ class BackendAdapter:
             "Content-Type": "application/json"
         }
 
-    def get_sensors_metadata(self, token, target_company=None):
+    # Artık her metodda 'async with' kullanmaya gerek yok, self.client'ı kullanıyoruz.
+    async def get_sensors_metadata(self, token, target_company=None):
         url = f"{self.base_url}/api/v1/sensors"
         params = {}
         if target_company:
             params["target_company_name"] = target_company
 
         try:
-            response = requests.get(url, headers=self._get_headers(token), params=params, timeout=10)
+            response = await self.client.get(url, headers=self._get_headers(token), params=params)
             if response.status_code == 200:
                 return response.json()
             return []
@@ -26,14 +30,14 @@ class BackendAdapter:
             print(f"❌ Metadata Çekilemedi: {e}")
             return []
 
-    def get_live_values(self, token, target_company=None):
+    async def get_live_values(self, token, target_company=None):
         url = f"{self.base_url}/api/v1/sensors/latest"
         params = {}
         if target_company:
             params["target_company_name"] = target_company
 
         try:
-            response = requests.get(url, headers=self._get_headers(token), params=params, timeout=10)
+            response = await self.client.get(url, headers=self._get_headers(token), params=params)
             if response.status_code == 200:
                 return response.json()
             return []
@@ -41,10 +45,10 @@ class BackendAdapter:
             print(f"❌ Canlı Veri Çekilemedi: {e}")
             return []
 
-    def get_companies(self):
+    async def get_companies(self):
         url = f"{self.base_url}/companies/"
         try:
-            response = requests.get(url, timeout=10)
+            response = await self.client.get(url)
             if response.status_code == 200:
                 return response.json()
             return []
@@ -52,24 +56,13 @@ class BackendAdapter:
             print(f"❌ Şirket Listesi Alınamadı: {e}")
             return []
 
-    # --- DÜZELTİLEN KISIM: PUT İLE GÜNCELLEME ---
-    def update_sensor_location(self, token, sensor_id, new_location):
-        """
-        [PUT] /api/v1/sensors/{sensor_id}
-        """
+    async def update_sensor_location(self, token, sensor_id, new_location):
         url = f"{self.base_url}/api/v1/sensors/{sensor_id}"
-        
-        # Swagger resmine göre PUT isteği atıyoruz.
-        # NOT: Eğer backend PUT isteğinde diğer alanları (name, type vb.) zorunlu kılıyorsa
-        # burası 422 hatası verebilir. Şimdilik sadece location gönderiyoruz.
-        payload = {
-            "location": new_location
-        }
+        payload = {"location": new_location}
 
         try:
             print(f"📡 MongoDB Güncelleniyor (PUT): {sensor_id} -> {new_location}")
-            response = requests.put(url, headers=self._get_headers(token), json=payload, timeout=5)
-            
+            response = await self.client.put(url, headers=self._get_headers(token), json=payload)
             if response.status_code in [200, 204]:
                 print("✅ Başarılı!")
                 return True
@@ -79,3 +72,7 @@ class BackendAdapter:
         except Exception as e:
             print(f"❌ Bağlantı Hatası: {e}")
             return False
+
+    # Uygulama kapanırken client'ı temiz bir şekilde kapatmak için:
+    async def close(self):
+        await self.client.aclose()
