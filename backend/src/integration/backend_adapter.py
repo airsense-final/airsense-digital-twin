@@ -76,3 +76,28 @@ class BackendAdapter:
     # Uygulama kapanırken client'ı temiz bir şekilde kapatmak için:
     async def close(self):
         await self.client.aclose()
+
+    async def get_thresholds(self, token, target_company=None, scenario=None):
+        url = f"{self.base_url}/api/v1/thresholds/"
+        params = {}
+        
+        # Sadece Super Admin bu parametreleri kullanabilir, 
+        # ama adapter esnek olmalı, parametre varsa göndeririz.
+        if target_company:
+            params["target_company_name"] = target_company
+        if scenario:
+            params["scenario"] = scenario
+
+        try:
+            # Backend'e isteği atıyoruz
+            response = await self.client.get(url, headers=self._get_headers(token), params=params)
+            
+            if response.status_code == 200:
+                print(f"✅ Thresholds Çekildi: {len(response.json())} adet kural.")
+                return response.json()
+            else:
+                print(f"⚠️ Threshold Hatası: {response.status_code} - {response.text}")
+                return []
+        except Exception as e:
+            print(f"❌ Threshold Bağlantı Hatası: {e}")
+            return []

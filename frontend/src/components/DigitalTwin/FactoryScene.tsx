@@ -12,6 +12,7 @@ import { Float, Sphere } from "@react-three/drei";
 import { useSimulation } from "../../hooks/useSimulation";
 import { SimulationPanel } from "./SimulationPanel";
 
+
 const DigitalClock = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   useEffect(() => {
@@ -20,6 +21,18 @@ const DigitalClock = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+const SENSOR_TYPE_MAP: Record<string, string> = {
+  "Temperature": "dht11_temp",
+  "Humidity": "dht11_hum",
+  "Methane Sensor": "mq4",
+  "CO Sensor": "mq7",
+  "Flammable Gas Sensor": "mq9",
+  "Air Quality": "mq135",
+  "Alcohol Sensor": "mq3",
+  "CO2 Sensor": "scd40", // Varsayılan eşleşme
+  // Eğer yeni sensör gelirse buraya eklemen yeterli
+};
 
   return (
     <div
@@ -224,6 +237,7 @@ const SirenStrobe = () => {
 export const FactoryScene = () => {
   const [sensors, setSensors] = useState<any[]>([]); 
   const [companies, setCompanies] = useState<any[]>([]);
+  const [thresholds, setThresholds] = useState<any[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -239,6 +253,8 @@ export const FactoryScene = () => {
     removeVirtualSensor,
     runScenario,
   } = useSimulation(sensors);
+
+  
 
   const displaySensors = isSimulating ? simSensors : sensors;
 
@@ -571,7 +587,7 @@ export const FactoryScene = () => {
         )}
         <Canvas
           shadows
-          camera={{ position: [20, 25, 30], fov: 45 }}
+          camera={{ position: [20, 14, 30], fov: 45 }}
           frameloop="always"
         >
           <color attach="background" args={["#e5e7eb"]} />
