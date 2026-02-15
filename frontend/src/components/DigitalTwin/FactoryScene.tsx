@@ -12,7 +12,6 @@ import { Float, Sphere } from "@react-three/drei";
 import { useSimulation } from "../../hooks/useSimulation";
 import { SimulationPanel } from "./SimulationPanel";
 
-
 const DigitalClock = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   useEffect(() => {
@@ -21,18 +20,6 @@ const DigitalClock = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
-
-const SENSOR_TYPE_MAP: Record<string, string> = {
-  "Temperature": "dht11_temp",
-  "Humidity": "dht11_hum",
-  "Methane Sensor": "mq4",
-  "CO Sensor": "mq7",
-  "Flammable Gas Sensor": "mq9",
-  "Air Quality": "mq135",
-  "Alcohol Sensor": "mq3",
-  "CO2 Sensor": "scd40", // Varsayılan eşleşme
-  // Eğer yeni sensör gelirse buraya eklemen yeterli
-};
 
   return (
     <div
@@ -54,8 +41,94 @@ const SENSOR_TYPE_MAP: Record<string, string> = {
   );
 };
 
+// --- DÜZELTME 1: BU ARTIK DIŞARIDA (GLOBAL) ---
+const SENSOR_TYPE_MAP: Record<string, string> = {
+  Temperature: "dht11_temp",
+  Humidity: "dht11_hum",
+  "Methane Sensor": "mq4",
+  "CO Sensor": "mq7",
+  "Flammable Gas Sensor": "mq9",
+  "Air Quality": "mq135",
+  "Alcohol Sensor": "mq3",
+  "CO2 Sensor": "scd40",
+};
+
+// --- DÜZELTME 2: BU ARTIK DIŞARIDA (GLOBAL) ---
+const HeatmapLegend = ({ mode }: { mode: "TEMP" | "HUMIDITY" | "GAS" |"GENERAL" }) => {
+  const config = {
+    TEMP: { min: 0, max: 80, unit: "°C", title: "Sıcaklık" },
+    HUMIDITY: { min: 0, max: 100, unit: "%", title: "Nem" },
+    GAS: { min: 0, max: 1000, unit: "ppm", title: "Gaz Yoğunluğu" },
+    GENERAL: { min: 0, max: 100, unit: "Risk %",title:"Genel Risk" }
+  }[mode];
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: "100px",
+        right: "20px",
+        background: "rgba(15, 23, 42, 0.9)",
+        padding: "15px",
+        borderRadius: "12px",
+        border: "1px solid #475569",
+        display: "flex",
+        alignItems: "center",
+        gap: "15px",
+        color: "white",
+        zIndex: 20,
+        fontFamily: "sans-serif",
+        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)",
+      }}
+    >
+      {/* Renk Çubuğu */}
+      <div
+        style={{
+          width: "24px",
+          height: "160px",
+          background: "linear-gradient(to top, blue, #00ff00, yellow, red)",
+          borderRadius: "12px",
+          border: "1px solid white",
+        }}
+      />
+
+      {/* Değerler */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          height: "160px",
+          fontSize: "12px",
+          fontWeight: "bold",
+        }}
+      >
+        <div style={{ color: "#ef4444" }}>
+          ▲ {config.max} {config.unit} (Critical)
+        </div>
+        <div style={{ color: "#fbbf24" }}>
+          - {(config.max * 0.75).toFixed(0)} {config.unit}
+        </div>
+        <div style={{ color: "#22c55e" }}>
+          - {(config.max * 0.5).toFixed(0)} {config.unit} (Normal)
+        </div>
+        <div style={{ color: "#3b82f6" }}>
+          - {(config.max * 0.25).toFixed(0)} {config.unit}
+        </div>
+        <div style={{ color: "#3b82f6" }}>
+          ▼ {config.min} {config.unit} (Safe)
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- ANİMASYONLU, YAYILAN GERÇEKÇİ YANGIN VE DUMAN EFEKTİ ---
-const FireEffect = ({ position }: { position: { x: number; y: number; z: number } }) => {
+const FireEffect = ({
+  position,
+}: {
+  position: { x: number; y: number; z: number };
+}) => {
   const smokeRefs = useRef<any[]>([]);
   const fireRef = useRef<any>(null);
   const lightRef = useRef<any>(null);
@@ -63,7 +136,8 @@ const FireEffect = ({ position }: { position: { x: number; y: number; z: number 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     if (fireRef.current) {
-      fireRef.current.scale.y = 1 + Math.sin(t * 15) * 0.2 + Math.cos(t * 10) * 0.1;
+      fireRef.current.scale.y =
+        1 + Math.sin(t * 15) * 0.2 + Math.cos(t * 10) * 0.1;
       fireRef.current.scale.x = 1 + Math.cos(t * 8) * 0.1;
       fireRef.current.scale.z = 1 + Math.sin(t * 7) * 0.1;
     }
@@ -73,11 +147,11 @@ const FireEffect = ({ position }: { position: { x: number; y: number; z: number 
     smokeRefs.current.forEach((mesh, i) => {
       if (!mesh) return;
       const lifeTime = 6;
-      const timeOffset = t + (i * (lifeTime / smokeRefs.current.length));
+      const timeOffset = t + i * (lifeTime / smokeRefs.current.length);
       const life = timeOffset % lifeTime;
       const progress = life / lifeTime;
-      mesh.position.y = 1 + (progress * 15); 
-      const spread = 2 + (Math.pow(progress, 2) * 25);
+      mesh.position.y = 1 + progress * 15;
+      const spread = 2 + Math.pow(progress, 2) * 25;
       mesh.scale.set(spread, spread * 0.5, spread);
       if (mesh.material) {
         mesh.material.opacity = (1 - progress) * 0.6;
@@ -89,63 +163,101 @@ const FireEffect = ({ position }: { position: { x: number; y: number; z: number 
     <group position={[position.x, 0, position.z]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 0]}>
         <circleGeometry args={[2.5, 32]} />
-        <meshStandardMaterial color="#ff3300" emissive="#ff2200" emissiveIntensity={6} transparent opacity={0.9} />
+        <meshStandardMaterial
+          color="#ff3300"
+          emissive="#ff2200"
+          emissiveIntensity={6}
+          transparent
+          opacity={0.9}
+        />
       </mesh>
       <group ref={fireRef} position={[0, 1.5, 0]}>
         <Sphere args={[1.5, 16, 16]} scale={[1, 2, 1]}>
-          <meshStandardMaterial color="#fffb00" emissive="#ffaa00" emissiveIntensity={10} transparent opacity={0.8} depthWrite={false} />
+          <meshStandardMaterial
+            color="#fffb00"
+            emissive="#ffaa00"
+            emissiveIntensity={10}
+            transparent
+            opacity={0.8}
+            depthWrite={false}
+          />
         </Sphere>
         <Sphere args={[2.2, 16, 16]} position={[0, 0.5, 0]} scale={[1, 1.5, 1]}>
-          <meshStandardMaterial color="#ff4400" emissive="#ff0000" emissiveIntensity={5} transparent opacity={0.6} depthWrite={false} />
+          <meshStandardMaterial
+            color="#ff4400"
+            emissive="#ff0000"
+            emissiveIntensity={5}
+            transparent
+            opacity={0.6}
+            depthWrite={false}
+          />
         </Sphere>
       </group>
       {[...Array(7)].map((_, i) => (
-        <Sphere 
-          key={i} 
-          ref={(el) => { smokeRefs.current[i] = el; }} 
-          args={[1, 16, 16]} 
+        <Sphere
+          key={i}
+          ref={(el) => {
+            smokeRefs.current[i] = el;
+          }}
+          args={[1, 16, 16]}
           position={[0, 0, 0]}
         >
-          <meshStandardMaterial color="#0a0a0a" transparent opacity={0} depthWrite={false} roughness={1} />
+          <meshStandardMaterial
+            color="#0a0a0a"
+            transparent
+            opacity={0}
+            depthWrite={false}
+            roughness={1}
+          />
         </Sphere>
       ))}
-      <pointLight ref={lightRef} position={[0, 3, 0]} color="#ff3300" distance={60} castShadow />
+      <pointLight
+        ref={lightRef}
+        position={[0, 3, 0]}
+        color="#ff3300"
+        distance={60}
+        castShadow
+      />
     </group>
   );
 };
 
-const GasLeakEffect = ({ position }: { position: { x: number; y: number; z: number } }) => {
+const GasLeakEffect = ({
+  position,
+}: {
+  position: { x: number; y: number; z: number };
+}) => {
   const jetRefs = useRef<any[]>([]);
   const floorRefs = useRef<any[]>([]);
-  const PIPE_HEIGHT = 18; 
+  const PIPE_HEIGHT = 18;
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     jetRefs.current.forEach((mesh, i) => {
       if (!mesh) return;
-      const lifeTime = 1.4; 
+      const lifeTime = 1.4;
       const offset = i * (lifeTime / jetRefs.current.length);
       const progress = ((t + offset) % lifeTime) / lifeTime;
-      mesh.position.y = PIPE_HEIGHT - (progress * PIPE_HEIGHT); 
-      const spread = 0.5 + (progress * 4.5); 
+      mesh.position.y = PIPE_HEIGHT - progress * PIPE_HEIGHT;
+      const spread = 0.5 + progress * 4.5;
       mesh.position.x = Math.sin(i * 132.5) * (progress * 2.5);
       mesh.position.z = Math.cos(i * 123.5) * (progress * 2.5);
       mesh.scale.set(spread, spread * 1.5, spread);
       if (mesh.material) mesh.material.opacity = (1 - progress) * 0.7;
     });
     floorRefs.current.forEach((mesh, i) => {
-        if (!mesh) return;
-        const lifeTime = 4.0;
-        const offset = i * (lifeTime / floorRefs.current.length);
-        const progress = ((t + offset) % lifeTime) / lifeTime;
-        mesh.position.y = 0.3; 
-        const radius = progress * 12; 
-        const angle = i * (Math.PI * 2 / floorRefs.current.length);
-        mesh.position.x = Math.cos(angle) * radius;
-        mesh.position.z = Math.sin(angle) * radius;
-        const scale = 5 + (progress * 7);
-        mesh.scale.set(scale, scale * 0.2, scale);
-        if (mesh.material) mesh.material.opacity = (1 - progress) * 0.5;
+      if (!mesh) return;
+      const lifeTime = 4.0;
+      const offset = i * (lifeTime / floorRefs.current.length);
+      const progress = ((t + offset) % lifeTime) / lifeTime;
+      mesh.position.y = 0.3;
+      const radius = progress * 12;
+      const angle = i * ((Math.PI * 2) / floorRefs.current.length);
+      mesh.position.x = Math.cos(angle) * radius;
+      mesh.position.z = Math.sin(angle) * radius;
+      const scale = 5 + progress * 7;
+      mesh.scale.set(scale, scale * 0.2, scale);
+      if (mesh.material) mesh.material.opacity = (1 - progress) * 0.5;
     });
   });
 
@@ -153,19 +265,56 @@ const GasLeakEffect = ({ position }: { position: { x: number; y: number; z: numb
     <group position={[position.x, 0, position.z]}>
       <mesh position={[0, PIPE_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.8, 0.2, 16, 32]} />
-        <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={5} />
+        <meshStandardMaterial
+          color="#00ff88"
+          emissive="#00ff88"
+          emissiveIntensity={5}
+        />
       </mesh>
       {[...Array(20)].map((_, i) => (
-        <Sphere key={`jet-${i}`} ref={(el) => { jetRefs.current[i] = el; }} args={[0.7, 16, 16]}>
-          <meshStandardMaterial color="#00ff88" emissive="#00ff88" emissiveIntensity={1} transparent opacity={0} depthWrite={false} />
+        <Sphere
+          key={`jet-${i}`}
+          ref={(el) => {
+            jetRefs.current[i] = el;
+          }}
+          args={[0.7, 16, 16]}
+        >
+          <meshStandardMaterial
+            color="#00ff88"
+            emissive="#00ff88"
+            emissiveIntensity={1}
+            transparent
+            opacity={0}
+            depthWrite={false}
+          />
         </Sphere>
       ))}
       {[...Array(15)].map((_, i) => (
-        <Sphere key={`floor-${i}`} ref={(el) => { floorRefs.current[i] = el; }} args={[1.2, 32, 32]}>
-          <meshStandardMaterial color="#10b981" emissive="#064e3b" emissiveIntensity={0.2} transparent opacity={0} depthWrite={false} />
+        <Sphere
+          key={`floor-${i}`}
+          ref={(el) => {
+            floorRefs.current[i] = el;
+          }}
+          args={[1.2, 32, 32]}
+        >
+          <meshStandardMaterial
+            color="#10b981"
+            emissive="#064e3b"
+            emissiveIntensity={0.2}
+            transparent
+            opacity={0}
+            depthWrite={false}
+          />
         </Sphere>
       ))}
-      <spotLight position={[0, PIPE_HEIGHT + 1, 0]} target-position={[0, 0, 0]} color="#00ff88" intensity={150} distance={40} angle={0.7} />
+      <spotLight
+        position={[0, PIPE_HEIGHT + 1, 0]}
+        target-position={[0, 0, 0]}
+        color="#00ff88"
+        intensity={150}
+        distance={40}
+        angle={0.7}
+      />
     </group>
   );
 };
@@ -183,8 +332,10 @@ const KeyboardMapMover = ({ controlsRef }: { controlsRef: any }) => {
   const { camera } = useThree();
   const [keys, setKeys] = useState<{ [key: string]: boolean }>({});
   useEffect(() => {
-    const down = (e: KeyboardEvent) => setKeys((k) => ({ ...k, [e.code]: true }));
-    const up = (e: KeyboardEvent) => setKeys((k) => ({ ...k, [e.code]: false }));
+    const down = (e: KeyboardEvent) =>
+      setKeys((k) => ({ ...k, [e.code]: true }));
+    const up = (e: KeyboardEvent) =>
+      setKeys((k) => ({ ...k, [e.code]: false }));
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     return () => {
@@ -222,25 +373,43 @@ const SirenStrobe = () => {
   useFrame(({ clock }) => {
     if (lightRef.current) {
       // Tehlike anı çakar efekti (Hızlı yanıp sönen kırmızı ışık)
-      lightRef.current.intensity = Math.sin(clock.getElapsedTime() * 15) > 0 ? 30 : 0;
+      lightRef.current.intensity =
+        Math.sin(clock.getElapsedTime() * 15) > 0 ? 30 : 0;
     }
   });
   return (
     <group>
-      <pointLight ref={lightRef} color="#ff0000" position={[0, 18, 0]} distance={150} />
-      <pointLight ref={lightRef} color="#ff0000" position={[40, 18, 40]} distance={100} />
-      <pointLight ref={lightRef} color="#ff0000" position={[-40, 18, -40]} distance={100} />
+      <pointLight
+        ref={lightRef}
+        color="#ff0000"
+        position={[0, 18, 0]}
+        distance={150}
+      />
+      <pointLight
+        ref={lightRef}
+        color="#ff0000"
+        position={[40, 18, 40]}
+        distance={100}
+      />
+      <pointLight
+        ref={lightRef}
+        color="#ff0000"
+        position={[-40, 18, -40]}
+        distance={100}
+      />
     </group>
   );
 };
 
 export const FactoryScene = () => {
-  const [sensors, setSensors] = useState<any[]>([]); 
+  const [sensors, setSensors] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
   const [thresholds, setThresholds] = useState<any[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
+ // Tip tanımına 'GENERAL' eklendi ve varsayılan mod yapıldı
+  const [heatmapMode, setHeatmapMode] = useState<'TEMP' | 'HUMIDITY' | 'GAS' | 'GENERAL'>('GENERAL');
 
   const {
     isSimulating,
@@ -254,8 +423,6 @@ export const FactoryScene = () => {
     runScenario,
   } = useSimulation(sensors);
 
-  
-
   const displaySensors = isSimulating ? simSensors : sensors;
 
   const controlsRef = useRef<any>(null);
@@ -266,7 +433,16 @@ export const FactoryScene = () => {
 
   if (!token)
     return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "white", background: "#0f172a" }}>
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "white",
+          background: "#0f172a",
+        }}
+      >
         <h1>⛔ Access Denied</h1>
       </div>
     );
@@ -547,35 +723,112 @@ export const FactoryScene = () => {
 
       <div style={{ flex: 1, position: "relative" }}>
         {/* --- YENİ: MERKEZİ UYARI UI --- */}
-        {isSimulating && simMode !== 'NORMAL' && (
-          <div style={{
-            position: 'absolute', top: '15%', left: '50%', transform: 'translate(-50%, -50%)',
-            zIndex: 100, background: 'rgba(220, 38, 38, 0.85)',
-            color: 'white', padding: '20px 40px', borderRadius: '12px',
-            fontSize: '28px', fontWeight: 'bold', border: '3px solid white',
-            boxShadow: '0 0 20px rgba(255,0,0,0.5)', pointerEvents: 'none', textAlign: 'center'
-          }}>
+        {isSimulating && simMode !== "NORMAL" && (
+          <div
+            style={{
+              position: "absolute",
+              top: "15%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 100,
+              background: "rgba(220, 38, 38, 0.85)",
+              color: "white",
+              padding: "20px 40px",
+              borderRadius: "12px",
+              fontSize: "28px",
+              fontWeight: "bold",
+              border: "3px solid white",
+              boxShadow: "0 0 20px rgba(255,0,0,0.5)",
+              pointerEvents: "none",
+              textAlign: "center",
+            }}
+          >
             🚨 EMERGENCY: {simMode} DETECTED! 🚨
-            <div style={{ fontSize: '14px', marginTop: '5px' }}>Immediate Action Required In Affected Zones</div>
+            <div style={{ fontSize: "14px", marginTop: "5px" }}>
+              Immediate Action Required In Affected Zones
+            </div>
           </div>
         )}
 
         {/* --- YENİ: KRİTİK SENSÖR LİSTESİ UI --- */}
-        {isSimulating && displaySensors.some(s => s.status === 'critical') && (
-          <div style={{
-            position: 'absolute', right: '20px', top: '100px', zIndex: 100,
-            background: 'rgba(15, 23, 42, 0.9)', padding: '15px',
-            borderRadius: '8px', border: '2px solid #ef4444', width: '220px'
-          }}>
-            <h4 style={{ color: '#ef4444', margin: '0 0 10px 0', borderBottom: '1px solid #ef4444', paddingBottom: '5px' }}>⚠️ CRITICAL NODES</h4>
-            {displaySensors.filter(s => s.status === 'critical').map(s => (
-              <div key={s.id} style={{ color: 'white', fontSize: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                <span>{s.name}:</span>
-                <b style={{ color: '#f87171' }}>{s.value?.toFixed(1)}</b>
-              </div>
-            ))}
+        {isSimulating &&
+          displaySensors.some((s) => s.status === "critical") && (
+            <div
+              style={{
+                position: "absolute",
+                right: "20px",
+                top: "100px",
+                zIndex: 100,
+                background: "rgba(15, 23, 42, 0.9)",
+                padding: "15px",
+                borderRadius: "8px",
+                border: "2px solid #ef4444",
+                width: "220px",
+              }}
+            >
+              <h4
+                style={{
+                  color: "#ef4444",
+                  margin: "0 0 10px 0",
+                  borderBottom: "1px solid #ef4444",
+                  paddingBottom: "5px",
+                }}
+              >
+                ⚠️ CRITICAL NODES
+              </h4>
+              {displaySensors
+                .filter((s) => s.status === "critical")
+                .map((s) => (
+                  <div
+                    key={s.id}
+                    style={{
+                      color: "white",
+                      fontSize: "12px",
+                      marginBottom: "8px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span>{s.name}:</span>
+                    <b style={{ color: "#f87171" }}>{s.value?.toFixed(1)}</b>
+                  </div>
+                ))}
+            </div>
+          )}
+
+        {/* --- UI: HEATMAP SEÇİCİ --- */}
+        {showHeatmap && (
+          <div
+            style={{
+              position: "absolute",
+              top: "70px",
+              right: "20px",
+              zIndex: 20,
+            }}
+          >
+            <select
+              onChange={(e) => setHeatmapMode(e.target.value as any)}
+              value={heatmapMode}
+              style={{
+                padding: "8px",
+                background: "#334155",
+                color: "#38bdf8",
+                borderRadius: "6px",
+                border: "1px solid #475569",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              <option value="GENERAL">🌍 General Risk Map</option>
+              <option value="TEMP">🌡️ Temperature Map</option>
+              <option value="HUMIDITY">💧 Humidity Map</option>
+              <option value="GAS">☠️ Gas/Hazard Map</option>
+            </select>
           </div>
         )}
+
+        {/* --- UI: HEATMAP LEGEND (ARTIK TANIMLI) --- */}
+        {showHeatmap && <HeatmapLegend mode={heatmapMode} />}
 
         {isSimulating && (
           <SimulationPanel
@@ -592,24 +845,39 @@ export const FactoryScene = () => {
         >
           <color attach="background" args={["#e5e7eb"]} />
           <fog attach="fog" args={["#e5e7eb", 40, 180]} />
-          
+
           {/* TEHLİKE ANINDA ANA IŞIKLARI LOŞLAŞTIR */}
-          <hemisphereLight intensity={isSimulating && simMode !== 'NORMAL' ? 0.3 : 0.8} groundColor="#d1d5db" color="#ffffff" />
-          <directionalLight position={[50, 80, 50]} intensity={isSimulating && simMode !== 'NORMAL' ? 0.5 : 1.5} castShadow />
-          
+          <hemisphereLight
+            intensity={isSimulating && simMode !== "NORMAL" ? 0.3 : 0.8}
+            groundColor="#d1d5db"
+            color="#ffffff"
+          />
+          <directionalLight
+            position={[50, 80, 50]}
+            intensity={isSimulating && simMode !== "NORMAL" ? 0.5 : 1.5}
+            castShadow
+          />
+
           {/* YENİ: TEHLİKE ANINDA ÇAKAN SİREN IŞIKLARI */}
-          {isSimulating && simMode !== 'NORMAL' && <SirenStrobe />}
+          {isSimulating && simMode !== "NORMAL" && <SirenStrobe />}
 
           <pointLight position={[0, 18, 0]} intensity={0.5} />
           <KeyboardMapMover controlsRef={controlsRef} />
-          <MapControls ref={controlsRef} makeDefault screenSpacePanning={true} dampingFactor={0.1} minDistance={5} maxDistance={90} />
+          <MapControls
+            ref={controlsRef}
+            makeDefault
+            screenSpacePanning={true}
+            dampingFactor={0.1}
+            minDistance={5}
+            maxDistance={90}
+          />
 
           {isSimulating && (simMode === "FIRE" || simMode === "GAS_LEAK") && (
             <mesh
               rotation={[-Math.PI / 2, 0, 0]}
               position={[0, 0.1, 0]}
               onDoubleClick={(e: any) => {
-                e.stopPropagation(); 
+                e.stopPropagation();
                 runScenario(simMode, { x: e.point.x, y: 0.5, z: e.point.z });
               }}
             >
@@ -619,12 +887,34 @@ export const FactoryScene = () => {
           )}
 
           <FactoryArchitecture />
-          <HeatmapLayer sensors={displaySensors} visible={showHeatmap} />
+          <HeatmapLayer
+            sensors={displaySensors}
+            visible={showHeatmap}
+            mode={heatmapMode}
+            minRange={heatmapMode === "GAS" ? 0 : 0}
+            maxRange={
+              heatmapMode === "GAS"
+                ? 1000
+                : heatmapMode === "HUMIDITY"
+                  ? 100
+                  : 80
+            }
+          />
+          {isSimulating && simCenter && simMode === "FIRE" && (
+            <FireEffect position={simCenter} />
+          )}
+          {isSimulating && simCenter && simMode === "GAS_LEAK" && (
+            <GasLeakEffect position={simCenter} />
+          )}
 
-          {isSimulating && simCenter && simMode === "FIRE" && <FireEffect position={simCenter} />}
-          {isSimulating && simCenter && simMode === "GAS_LEAK" && <GasLeakEffect position={simCenter} />}
-
-          <ContactShadows resolution={1024} scale={150} blur={3} opacity={0.4} far={10} color="#000000" />
+          <ContactShadows
+            resolution={1024}
+            scale={150}
+            blur={3}
+            opacity={0.4}
+            far={10}
+            color="#000000"
+          />
 
           {displaySensors.map((s) => (
             <SensorNode
