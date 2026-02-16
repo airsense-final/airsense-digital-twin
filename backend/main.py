@@ -1,12 +1,13 @@
 import json
 import os
 import sqlite3
-from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.integration.backend_adapter import BackendAdapter
 import asyncio
 from src.integration.websocket_manager import manager 
+from typing import Optional
 
 app = FastAPI()
 adapter = BackendAdapter()
@@ -66,6 +67,30 @@ class MapRequest(BaseModel):
 def read_root():
     return {"status": "Digital Twin Engine ONLINE", "db": "SQLite"}
 
+# --- EKLENEN KISIM BAŞLANGICI: Threshold Endpoint ---
+@app.get("/api/v1/thresholds/")
+async def proxy_get_thresholds(
+    request: Request,
+    company: Optional[str] = None,
+    scenario: Optional[str] = None
+):
+    # 1. Token'ı Header'dan al
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Token missing")
+    
+    token = auth_header.split(" ")[1] if " " in auth_header else auth_header
+
+    # 2. Adapter üzerinden Ana Backend'e sor
+    thresholds_data = await adapter.get_thresholds(
+        token=token, 
+        target_company=company, 
+        scenario=scenario
+    )
+
+    return thresholds_data
+# --- EKLENEN KISIM SONU ---
+
 @app.get("/api/digital-twin-data")
 async def get_digital_twin_data(authorization: str = Header(None), company: str = Query(None)):
     token = ""
@@ -89,12 +114,9 @@ async def get_digital_twin_data(authorization: str = Header(None), company: str 
             mounting_points = data.get("mounting_points", {})
     except: pass
 
-    # PERFORMANS DÜZELTMESİ: Verileri sırayla beklemek yerine aynı anda çekiyoruz
-    # asyncio.gather kullanarak iki isteği tek seferde yola çıkarıyoruz.
     sensors_metadata_task = adapter.get_sensors_metadata(token, target_comp)
     live_values_task = adapter.get_live_values(token, target_comp)
     
-    # İki görev de aynı anda çalışır, en uzunu kadar sürer (toplamları kadar değil)
     sensors_metadata, live_values = await asyncio.gather(sensors_metadata_task, live_values_task)
     
     saved_mappings = load_mappings_from_db()
@@ -119,7 +141,6 @@ async def get_digital_twin_data(authorization: str = Header(None), company: str 
     used_slots = set()
     processed_ids = set()
 
-    # Orijinal eşleştirme döngülerin (mantık hiç bozulmadı)
     for sensor in sensors_metadata:
         s_id = str(sensor.get("sensor_id"))
         api_raw_loc = str(sensor.get("location", "unknown")).lower()
@@ -165,7 +186,6 @@ async def map_sensor_to_location(data: MapRequest, authorization: str = Header(N
         save_mapping_to_db(data.sensor_id, data.location_key)
         sync_status = "Skipped"
         if token:
-            # AWAIT eklendi
             success = await adapter.update_sensor_location(token, data.sensor_id, data.location_key)
             sync_status = "Synced" if success else "Failed"
         return {"status": "success", "message": "Saved", "sync": sync_status}
@@ -188,7 +208,6 @@ def get_layout_slots(company: str = Query(None)):
 
 @app.get("/api/companies")
 async def get_companies_list(): 
-    # AWAIT eklendi
     return await adapter.get_companies()
 
 @app.get("/api/room-config")
@@ -205,7 +224,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), comp
     try:
         while True:
             try:
-                # Veriyi çek ve hemen gönder
                 live_data = await adapter.get_live_values(token=token, target_company=target_comp)
                 if live_data and len(live_data) > 0:
                     await websocket.send_json({

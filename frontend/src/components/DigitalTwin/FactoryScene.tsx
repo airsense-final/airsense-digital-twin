@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { MapControls, ContactShadows, Cylinder } from "@react-three/drei";
 import axios from "axios";
@@ -53,14 +59,37 @@ const SENSOR_TYPE_MAP: Record<string, string> = {
   "CO2 Sensor": "scd40",
 };
 
-// --- DÜZELTME 2: BU ARTIK DIŞARIDA (GLOBAL) ---
-const HeatmapLegend = ({ mode }: { mode: "TEMP" | "HUMIDITY" | "GAS" |"GENERAL" }) => {
-  const config = {
-    TEMP: { min: 0, max: 80, unit: "°C", title: "Sıcaklık" },
-    HUMIDITY: { min: 0, max: 100, unit: "%", title: "Nem" },
-    GAS: { min: 0, max: 1000, unit: "ppm", title: "Gaz Yoğunluğu" },
-    GENERAL: { min: 0, max: 100, unit: "Risk %",title:"Genel Risk" }
-  }[mode];
+// --- GÜNCELLENMİŞ HEATMAP LEGEND ---
+const HeatmapLegend = ({
+  min,
+  max,
+  warning,
+  unit,
+}: {
+  min: number;
+  max: number;
+  warning: number;
+  unit: string;
+}) => {
+  // Warning değeri yoksa veya max'tan büyükse güvenli bir varsayılan (0.75) kullan
+  const safeWarnRatio =
+    warning && warning < max && warning > min ? warning / max : 0.75;
+  const safeWarnVal =
+    warning && warning < max ? warning : (max * 0.75).toFixed(0);
+
+  // Gradient Renk Durakları:
+  // 0% -> Mavi (Safe)
+  // warning/max -> Sarı (Warning)
+  // 100% -> Kırmızı (Critical)
+  const warnPercent = safeWarnRatio * 100;
+  // Normal (Yeşil) bölgeyi Warning'in yarısı olarak belirleyelim
+  const normalPercent = warnPercent * 0.6;
+
+  const gradient = `linear-gradient(to top, 
+    blue 0%, 
+    #22c55e ${normalPercent}%, 
+    #fbbf24 ${warnPercent}%, 
+    red 100%)`;
 
   return (
     <div
@@ -68,7 +97,7 @@ const HeatmapLegend = ({ mode }: { mode: "TEMP" | "HUMIDITY" | "GAS" |"GENERAL" 
         position: "absolute",
         bottom: "100px",
         right: "20px",
-        background: "rgba(15, 23, 42, 0.9)",
+        background: "rgba(15, 23, 42, 0.95)",
         padding: "15px",
         borderRadius: "12px",
         border: "1px solid #475569",
@@ -81,12 +110,12 @@ const HeatmapLegend = ({ mode }: { mode: "TEMP" | "HUMIDITY" | "GAS" |"GENERAL" 
         boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)",
       }}
     >
-      {/* Renk Çubuğu */}
+      {/* Dinamik Renk Çubuğu */}
       <div
         style={{
           width: "24px",
           height: "160px",
-          background: "linear-gradient(to top, blue, #00ff00, yellow, red)",
+          background: gradient,
           borderRadius: "12px",
           border: "1px solid white",
         }}
@@ -104,19 +133,21 @@ const HeatmapLegend = ({ mode }: { mode: "TEMP" | "HUMIDITY" | "GAS" |"GENERAL" 
         }}
       >
         <div style={{ color: "#ef4444" }}>
-          ▲ {config.max} {config.unit} (Critical)
+          ▲ {max} {unit} (Critical)
         </div>
+
+        {/* Warning Değeri Artık Veritabanından Geliyor */}
         <div style={{ color: "#fbbf24" }}>
-          - {(config.max * 0.75).toFixed(0)} {config.unit}
+          - {safeWarnVal} {unit} (Warning)
         </div>
+
+        {/* Normal Değeri Warning'e Göre Ölçekle */}
         <div style={{ color: "#22c55e" }}>
-          - {(config.max * 0.5).toFixed(0)} {config.unit} (Normal)
+          - {(Number(safeWarnVal) * 0.6).toFixed(0)} {unit} (Normal)
         </div>
+
         <div style={{ color: "#3b82f6" }}>
-          - {(config.max * 0.25).toFixed(0)} {config.unit}
-        </div>
-        <div style={{ color: "#3b82f6" }}>
-          ▼ {config.min} {config.unit} (Safe)
+          ▼ {min} {unit} (Safe)
         </div>
       </div>
     </div>
@@ -325,6 +356,7 @@ const getQueryParams = () => {
     token: params.get("token"),
     role: params.get("role")?.toLowerCase(),
     userCompany: params.get("company"),
+    scenario: params.get("scenario"), // SENARYO EKLENDİ
   };
 };
 
@@ -404,12 +436,14 @@ const SirenStrobe = () => {
 export const FactoryScene = () => {
   const [sensors, setSensors] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
-  const [thresholds, setThresholds] = useState<any[]>([]);
+  const [thresholds, setThresholds] = useState<any[]>([]); // DB'den gelecek kurallar
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
- // Tip tanımına 'GENERAL' eklendi ve varsayılan mod yapıldı
-  const [heatmapMode, setHeatmapMode] = useState<'TEMP' | 'HUMIDITY' | 'GAS' | 'GENERAL'>('GENERAL');
+  // Tip tanımına 'GENERAL' eklendi ve varsayılan mod yapıldı
+  const [heatmapMode, setHeatmapMode] = useState<
+    "TEMP" | "HUMIDITY" | "GAS" | "GENERAL"
+  >("GENERAL");
 
   const {
     isSimulating,
@@ -423,10 +457,102 @@ export const FactoryScene = () => {
     runScenario,
   } = useSimulation(sensors);
 
-  const displaySensors = isSimulating ? simSensors : sensors;
+  // --- DİNAMİK HEATMAP AYARLARI (DB + KİRLİ VERİ FİLTRESİ + WARNING DESTEĞİ) ---
+  const heatmapConfig = useMemo(() => {
+    // Varsayılan değerlere 'warning' alanını ekledik
+    const config: any = {
+      TEMP: { min: 0, max: 80, warning: 60, unit: "°C" },
+      HUMIDITY: { min: 0, max: 100, warning: 70, unit: "%" },
+      GAS: { min: 0, max: 100, warning: 75, unit: "Risk %" },
+      GENERAL: { min: 0, max: 100, warning: 75, unit: "Risk %" },
+    };
+
+    if (thresholds.length > 0) {
+      let maxTemp = 0,
+        warnTemp = 0;
+      let maxHum = 0,
+        warnHum = 0;
+
+      thresholds.forEach((t) => {
+        const type = t.sensor_type?.toLowerCase() || "";
+        const crit = t.critical_max;
+        const warn = t.warning_max; // Veritabanından okuyoruz
+
+        if (crit) {
+          // KİRLİ VERİ KORUMASI:
+          if (type.includes("temp")) {
+            if (crit < 200) {
+              maxTemp = Math.max(maxTemp, crit);
+              if (warn) warnTemp = Math.max(warnTemp, warn);
+            }
+          } else if (type.includes("hum")) {
+            maxHum = Math.max(maxHum, crit);
+            if (warn) warnHum = Math.max(warnHum, warn);
+          }
+          // Gaz için 100'e sabitliyoruz, değiştirmeye gerek yok.
+        }
+      });
+
+      // Config güncelleme
+      if (maxTemp > 0) {
+        config.TEMP.max = maxTemp;
+        if (warnTemp > 0) config.TEMP.warning = warnTemp;
+      }
+      if (maxHum > 0) {
+        config.HUMIDITY.max = maxHum;
+        if (warnHum > 0) config.HUMIDITY.warning = warnHum;
+      }
+    }
+    return config;
+  }, [thresholds]);
+  // --- AKILLI EŞLEŞTİRME ---
+  const enrichSensorsWithThresholds = useCallback(
+    (rawSensors: any[], thresholdList: any[]) => {
+      return rawSensors.map((sensor) => {
+        const mappedType =
+          SENSOR_TYPE_MAP[sensor.sensor_type] ||
+          sensor.sensor_type?.toLowerCase() ||
+          "";
+        const scenario = sensor.scenario || "indoor_small";
+
+        const matchingThreshold = thresholdList.find(
+          (t) =>
+            t.sensor_type === mappedType &&
+            t.scenario === scenario &&
+            t.company_id === sensor.company_id,
+        );
+
+        const limits = matchingThreshold
+          ? {
+              warning: matchingThreshold.warning_max || 9999,
+              critical: matchingThreshold.critical_max || 9999,
+            }
+          : { warning: 50000, critical: 50000 };
+
+        let status = "normal";
+        const val = sensor.value ?? 0;
+        if (val >= limits.critical) status = "critical";
+        else if (val >= limits.warning) status = "warning";
+
+        return { ...sensor, thresholds: limits, status: status };
+      });
+    },
+    [],
+  );
+
+  const displaySensors = useMemo(() => {
+    if (isSimulating) return simSensors;
+    return enrichSensorsWithThresholds(sensors, thresholds);
+  }, [
+    isSimulating,
+    simSensors,
+    sensors,
+    thresholds,
+    enrichSensorsWithThresholds,
+  ]);
 
   const controlsRef = useRef<any>(null);
-  const { token, role, userCompany } = getQueryParams();
+  const { token, role, userCompany, scenario } = getQueryParams();
   const [selectedCompany, setSelectedCompany] = useState<string>(
     userCompany || "",
   );
@@ -463,9 +589,21 @@ export const FactoryScene = () => {
     const fetchInitialData = async () => {
       if (!token) return;
       try {
+        const config = { headers: { Authorization: `Bearer ${token}` } };
         const params: any = {};
-        if (role === "superadmin" && selectedCompany)
+        if (role === "superadmin" && selectedCompany) {
           params.company = selectedCompany;
+          if (scenario) params.scenario = scenario;
+        }
+
+        // DB'den kuralları çek
+        const thRes = await axios.get(
+          `http://127.0.0.1:8001/api/v1/thresholds/`,
+          { ...config, params },
+        );
+        setThresholds(thRes.data);
+
+        // DB'den sensörleri çek
         const res = await axios.get(
           `http://127.0.0.1:8001/api/digital-twin-data`,
           {
@@ -545,7 +683,7 @@ export const FactoryScene = () => {
         }
       };
     }
-  }, [selectedCompany, token, role]);
+  }, [selectedCompany, token, role, scenario]);
 
   const handleUpdateLocation = async (
     sensorId: string,
@@ -722,7 +860,6 @@ export const FactoryScene = () => {
       </div>
 
       <div style={{ flex: 1, position: "relative" }}>
-        {/* --- YENİ: MERKEZİ UYARI UI --- */}
         {isSimulating && simMode !== "NORMAL" && (
           <div
             style={{
@@ -750,53 +887,50 @@ export const FactoryScene = () => {
           </div>
         )}
 
-        {/* --- YENİ: KRİTİK SENSÖR LİSTESİ UI --- */}
-        {isSimulating &&
-          displaySensors.some((s) => s.status === "critical") && (
-            <div
+        {displaySensors.some((s) => s.status === "critical") && (
+          <div
+            style={{
+              position: "absolute",
+              right: "20px",
+              top: "100px",
+              zIndex: 100,
+              background: "rgba(15, 23, 42, 0.9)",
+              padding: "15px",
+              borderRadius: "8px",
+              border: "2px solid #ef4444",
+              width: "220px",
+            }}
+          >
+            <h4
               style={{
-                position: "absolute",
-                right: "20px",
-                top: "100px",
-                zIndex: 100,
-                background: "rgba(15, 23, 42, 0.9)",
-                padding: "15px",
-                borderRadius: "8px",
-                border: "2px solid #ef4444",
-                width: "220px",
+                color: "#ef4444",
+                margin: "0 0 10px 0",
+                borderBottom: "1px solid #ef4444",
+                paddingBottom: "5px",
               }}
             >
-              <h4
-                style={{
-                  color: "#ef4444",
-                  margin: "0 0 10px 0",
-                  borderBottom: "1px solid #ef4444",
-                  paddingBottom: "5px",
-                }}
-              >
-                ⚠️ CRITICAL NODES
-              </h4>
-              {displaySensors
-                .filter((s) => s.status === "critical")
-                .map((s) => (
-                  <div
-                    key={s.id}
-                    style={{
-                      color: "white",
-                      fontSize: "12px",
-                      marginBottom: "8px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span>{s.name}:</span>
-                    <b style={{ color: "#f87171" }}>{s.value?.toFixed(1)}</b>
-                  </div>
-                ))}
-            </div>
-          )}
+              ⚠️ CRITICAL NODES
+            </h4>
+            {displaySensors
+              .filter((s) => s.status === "critical")
+              .map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    color: "white",
+                    fontSize: "12px",
+                    marginBottom: "8px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>{s.name}:</span>
+                  <b style={{ color: "#f87171" }}>{s.value?.toFixed(1)}</b>
+                </div>
+              ))}
+          </div>
+        )}
 
-        {/* --- UI: HEATMAP SEÇİCİ --- */}
         {showHeatmap && (
           <div
             style={{
@@ -827,8 +961,14 @@ export const FactoryScene = () => {
           </div>
         )}
 
-        {/* --- UI: HEATMAP LEGEND (ARTIK TANIMLI) --- */}
-        {showHeatmap && <HeatmapLegend mode={heatmapMode} />}
+        {showHeatmap && (
+          <HeatmapLegend
+            min={heatmapConfig[heatmapMode].min}
+            max={heatmapConfig[heatmapMode].max}
+            warning={heatmapConfig[heatmapMode].warning} // YENİ EKLENEN PROP
+            unit={heatmapConfig[heatmapMode].unit}
+          />
+        )}
 
         {isSimulating && (
           <SimulationPanel
@@ -887,19 +1027,19 @@ export const FactoryScene = () => {
           )}
 
           <FactoryArchitecture />
+
           <HeatmapLayer
             sensors={displaySensors}
             visible={showHeatmap}
-            mode={heatmapMode}
-            minRange={heatmapMode === "GAS" ? 0 : 0}
+            mode={heatmapMode as any}
+            minRange={
+              heatmapConfig[heatmapMode as keyof typeof heatmapConfig].min
+            }
             maxRange={
-              heatmapMode === "GAS"
-                ? 1000
-                : heatmapMode === "HUMIDITY"
-                  ? 100
-                  : 80
+              heatmapConfig[heatmapMode as keyof typeof heatmapConfig].max
             }
           />
+
           {isSimulating && simCenter && simMode === "FIRE" && (
             <FireEffect position={simCenter} />
           )}
