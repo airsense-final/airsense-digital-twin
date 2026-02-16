@@ -63,18 +63,16 @@ export const HeatmapLayer = ({ sensors, visible, mode, minRange, maxRange }: Hea
           // --- DEĞER NORMALİZASYONU (KRİTİK KISIM) ---
           let sensorValue = s.value || 0;
 
-          // Eğer GENERAL modundaysak, değeri "Kritik Eşik Yüzdesine" çevir
-          // Böylece 80 derece sıcaklık ile 1000 ppm gaz aynı "Kırmızı" şiddetinde görünür.
-          if (mode === 'GENERAL') {
+          // DÜZELTME BURADA: Sadece GENERAL değil, GAS modunda da yüzdeye çeviriyoruz.
+          // Çünkü farklı gazların (CO vs Metan) eşikleri farklıdır.
+          if (mode === 'GENERAL' || mode === 'GAS') {
              // Sensörün kendi kritik limiti (Backend'den gelen) yoksa varsayılan bir değer kullan
-             // Bu değerler FactoryScene'deki HEATMAP_CONFIG ile uyumlu olmalı
              const type = (s.sensor_type || "").toLowerCase();
-             let limit = 100; // Default
+             let limit = 1000; // Gazlar için varsayılan
 
              if (type.includes('temp')) limit = 80;
              else if (type.includes('hum')) limit = 100;
-             else limit = 1000; // Gazlar için
-
+             
              // Sensörde özel threshold varsa onu kullan (Backend verisi)
              if (s.thresholds?.critical) limit = s.thresholds.critical;
 
