@@ -10,10 +10,10 @@ import layoutConfig from "../../../../backend/models/sensor-layouts/default.json
 import { useSimulation } from "../../hooks/useSimulation";
 import { SimulationPanel } from "./SimulationPanel";
 
-// --- YENİ EKLENEN PARÇALAR (MODÜLER YAPI) ---
 import { DigitalClock, HeatmapLegend } from "./SceneUI";
 import { FireEffect, GasLeakEffect, SirenStrobe } from "./SceneEffects";
 import { KeyboardMapMover } from "./SceneControls";
+import { CrowdSimulation } from "./CrowdSimulation";
 
 const SENSOR_TYPE_MAP: Record<string, string> = {
   Temperature: "dht11_temp",
@@ -44,6 +44,12 @@ export const FactoryScene = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState<"TEMP" | "HUMIDITY" | "GAS" | "GENERAL">("GENERAL");
+  const [crowdStats, setCrowdStats] = useState({ alive: 5, safe: 0, injured: 0, dead: 0 });
+
+  const [agentCount, setAgentCount] = useState<number>(5);
+  const [resetTrigger, setResetTrigger] = useState<number>(0); // YENİ: Reset state'i
+  const [showReport, setShowReport] = useState(false);
+  const [finalReport, setFinalReport] = useState<any>(null);
 
   const {
     isSimulating, simSensors, simMode, simCenter,
@@ -256,8 +262,16 @@ export const FactoryScene = () => {
   };
 
   const toggleSimulation = () => {
-    if (isSimulating) stopSimulation();
-    else { startSimulation(); setIsEditMode(false); }
+    if (isSimulating) {
+      stopSimulation();
+      if (simMode !== "NORMAL") {
+          setFinalReport({ mode: simMode, stats: { ...crowdStats } });
+          setShowReport(true);
+      }
+    } else {
+      startSimulation();
+      setIsEditMode(false);
+    }
   };
 
   return (
@@ -268,6 +282,26 @@ export const FactoryScene = () => {
         </h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <DigitalClock />
+          
+          {/* İŞÇİ SAYISI VE RESET BUTONU */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#1e293b', padding: '6px 12px', borderRadius: '6px', border: '1px solid #334155' }}>
+             <span style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 'bold' }}>👷 Workers:</span>
+             <input 
+               type="number" 
+               value={agentCount} 
+               onChange={(e) => setAgentCount(Number(e.target.value))}
+               disabled={isSimulating}
+               style={{ width: '45px', background: 'transparent', color: 'white', border: 'none', fontWeight: 'bold', outline: 'none' }}
+             />
+             <button 
+               onClick={() => setResetTrigger(prev => prev + 1)}
+               title="İşçileri Resetle"
+               style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', marginLeft: '5px' }}
+             >
+               🔄 RESET
+             </button>
+          </div>
+
           <button onClick={toggleSimulation} style={{ background: isSimulating ? "#9333ea" : "#1e293b", color: "white", border: "1px solid #334155", padding: "8px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>
             {isSimulating ? "🛑 STOP SIMULATION" : "🧪 SIMULATION"}
           </button>
@@ -286,10 +320,70 @@ export const FactoryScene = () => {
       </div>
 
       <div style={{ flex: 1, position: "relative" }}>
+        
+        {/* OLAY YERİ RAPORU MODALI */}
+        {showReport && finalReport && (
+          <div style={{
+            position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 1000,
+            background: "rgba(15, 23, 42, 0.95)", padding: "30px", borderRadius: "12px", border: "2px solid #3b82f6", width: "400px", color: "white", fontFamily: "sans-serif", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.8)"
+          }}>
+            <h2 style={{ margin: "0 0 15px 0", color: "#3b82f6", borderBottom: "1px solid #334155", paddingBottom: "10px" }}>
+              📋 Incident Report
+            </h2>
+            <p style={{ margin: "0 0 20px 0", color: "#94a3b8" }}>Simulation Type: <b>{finalReport.mode}</b></p>
+            
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "16px" }}>
+              <span>Total Workers:</span> <b>{agentCount}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "16px" }}>
+              <span>✅ Safe (Evacuated):</span> <b style={{ color: "#22c55e" }}>{finalReport.stats.safe}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "16px" }}>
+              <span>🤕 Injured:</span> <b style={{ color: "#f97316" }}>{finalReport.stats.injured}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "25px", fontSize: "16px" }}>
+              <span>☠️ Casualties:</span> <b style={{ color: "#ef4444" }}>{finalReport.stats.dead}</b>
+            </div>
+
+            <button 
+              onClick={() => setShowReport(false)}
+              style={{ width: "100%", padding: "10px", background: "#3b82f6", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "16px" }}
+            >
+              CLOSE REPORT
+            </button>
+          </div>
+        )}
+
         {isSimulating && simMode !== "NORMAL" && (
           <div style={{ position: "absolute", top: "15%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 100, background: "rgba(220, 38, 38, 0.85)", color: "white", padding: "20px 40px", borderRadius: "12px", fontSize: "28px", fontWeight: "bold", border: "3px solid white", boxShadow: "0 0 20px rgba(255,0,0,0.5)", pointerEvents: "none", textAlign: "center" }}>
             🚨 EMERGENCY: {simMode} DETECTED! 🚨
             <div style={{ fontSize: "14px", marginTop: "5px" }}>Immediate Action Required In Affected Zones</div>
+          </div>
+        )}
+
+        {/* --- GÖRÜNÜR HALE GETİRİLEN TAHLİYE İSTATİSTİKLERİ UI --- */}
+        {isSimulating && simMode !== "NORMAL" && (
+          <div style={{
+            position: "absolute", top: "160px", right: "20px", zIndex: 200, // Z-index artırıldı, biraz daha aşağı alındı
+            background: "rgba(15, 23, 42, 0.95)", padding: "18px", borderRadius: "8px",
+            border: "2px solid #3b82f6", width: "240px", color: "white", fontFamily: "sans-serif",
+            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)"
+          }}>
+            <h4 style={{ margin: "0 0 10px 0", borderBottom: "1px solid #475569", paddingBottom: "5px", color: "#38bdf8", fontSize: "16px" }}>
+              🏃‍♂️ EVACUATİON STATUS
+            </h4>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}>
+              <span>🏃 Evacuating:</span> <b style={{ color: "#eab308" }}>{crowdStats.alive}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}>
+              <span>✅ Safe:</span> <b style={{ color: "#22c55e" }}>{crowdStats.safe}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}>
+              <span>🤕 Injured:</span> <b style={{ color: "#f97316" }}>{crowdStats.injured}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+              <span>☠️ Casualties:</span> <b style={{ color: "#ef4444" }}>{crowdStats.dead}</b>
+            </div>
           </div>
         )}
 
@@ -356,6 +450,14 @@ export const FactoryScene = () => {
             mode={heatmapMode as any}
             minRange={heatmapConfig[heatmapMode as keyof typeof heatmapConfig].min}
             maxRange={heatmapConfig[heatmapMode as keyof typeof heatmapConfig].max}
+          />
+
+          <CrowdSimulation 
+            isEmergency={isSimulating && simMode !== "NORMAL"}
+            hazardPosition={simCenter}
+            onStatsUpdate={setCrowdStats}
+            agentCount={agentCount} 
+            resetTrigger={resetTrigger} // YENİ: Prop geçirildi
           />
 
           {isSimulating && simCenter && simMode === "FIRE" && <FireEffect position={simCenter} />}

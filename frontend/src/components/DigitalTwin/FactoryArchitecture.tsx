@@ -1,57 +1,7 @@
 import React from 'react';
 import * as THREE from 'three';
 
-// İşçi Bileşeni Tip Tanımlaması
-interface WorkerProps {
-  position: [number, number, number];
-  rotation?: [number, number, number];
-}
 
-const Worker = ({ position, rotation = [0, 0, 0] }: WorkerProps) => (
-  <group position={position} rotation={rotation}>
-    {/* Bacaklar */}
-    <mesh position={[-0.25, 1, 0]} castShadow>
-      <boxGeometry args={[0.4, 2, 0.4]} />
-      <meshStandardMaterial color="#1e3a8a" />
-    </mesh>
-    <mesh position={[0.25, 1, 0]} castShadow>
-      <boxGeometry args={[0.4, 2, 0.4]} />
-      <meshStandardMaterial color="#1e3a8a" />
-    </mesh>
-    {/* Gövde */}
-    <mesh position={[0, 2.8, 0]} castShadow>
-      <boxGeometry args={[0.9, 1.6, 0.5]} />
-      <meshStandardMaterial color="#f97316" />
-    </mesh>
-    {/* Reflektörler */}
-    <mesh position={[0, 3, 0.26]}>
-      <boxGeometry args={[0.9, 0.1, 0.05]} />
-      <meshStandardMaterial color="#e5e7eb" emissive="#ffffff" emissiveIntensity={0.2} />
-    </mesh>
-    <mesh position={[0, 2.6, 0.26]}>
-      <boxGeometry args={[0.9, 0.1, 0.05]} />
-      <meshStandardMaterial color="#e5e7eb" emissive="#ffffff" emissiveIntensity={0.2} />
-    </mesh>
-    {/* Kollar */}
-    <mesh position={[-0.6, 2.8, 0]} castShadow>
-      <boxGeometry args={[0.3, 1.4, 0.3]} />
-      <meshStandardMaterial color="#334155" />
-    </mesh>
-    <mesh position={[0.6, 2.8, 0]} castShadow>
-      <boxGeometry args={[0.3, 1.4, 0.3]} />
-      <meshStandardMaterial color="#334155" />
-    </mesh>
-    {/* Kafa ve Baret */}
-    <mesh position={[0, 3.8, 0]} castShadow>
-      <sphereGeometry args={[0.35, 16, 16]} />
-      <meshStandardMaterial color="#ffdbac" />
-    </mesh>
-    <mesh position={[0, 4, 0]} castShadow>
-      <sphereGeometry args={[0.4, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-      <meshStandardMaterial color="#fbbf24" metalness={0.5} roughness={0.2} />
-    </mesh>
-  </group>
-);
 
 export const FactoryArchitecture = () => {
   const floorSize = 100;
@@ -195,12 +145,6 @@ export const FactoryArchitecture = () => {
           ))}
         </group>
       </group>
-
-      {/* İŞÇİLER */}
-      <Worker position={[-10, 0, -20]} rotation={[0, Math.PI / 4, 0]} />
-      <Worker position={[35, 0, 10]} rotation={[0, -Math.PI / 2, 0]} />
-      <Worker position={[-38, 0, -40]} rotation={[0, Math.PI / 3, 0]} />
-      <Worker position={[5, 0, 42]} rotation={[0, Math.PI, 0]} />
 
       {/* Kolonlar */}
       {[-40, 40].map((x) => ( [-30, 0, 30].map((z) => (
