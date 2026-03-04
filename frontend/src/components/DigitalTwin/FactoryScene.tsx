@@ -1,10 +1,4 @@
-import{
-  useEffect,
-  useState,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { MapControls, ContactShadows } from "@react-three/drei";
 import axios from "axios";
@@ -192,16 +186,21 @@ export const FactoryScene = () => {
     );
 
   useEffect(() => {
-    if (role === "superadmin") {
-      axios.get(`${API_URL}/api/companies`).then((res) => {
-        setCompanies(res.data);
-        if (!userCompany && res.data.length > 0)
-          setSelectedCompany(res.data[0].name);
-      });
-    } else if (userCompany) {
-      setSelectedCompany(userCompany);
-    }
-  }, [role, userCompany]);
+  if (role === "superadmin") {
+    axios.get(`${API_URL}/api/companies`).then((res) => {
+      setCompanies(res.data);
+      // Eğer URL'den bir şirket gelmişse onu koru, gelmemişse ilk şirketi seç
+      if (userCompany) {
+        setSelectedCompany(userCompany);
+      } else if (res.data.length > 0) {
+        setSelectedCompany(res.data[0].name);
+      }
+    });
+  } else if (userCompany) {
+    // Normal kullanıcı veya şirket admini ise direkt URL'deki şirketi al
+    setSelectedCompany(userCompany);
+  }
+}, [role, userCompany]); // userCompany bağımlılığını eklediğinden emin ol
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -209,7 +208,7 @@ export const FactoryScene = () => {
       try {
         const config = { headers: { Authorization: `Bearer ${token}` } };
         const params: any = {};
-        if (role === "superadmin" && selectedCompany) {
+        if (selectedCompany) {
           params.company = selectedCompany;
           if (scenario) params.scenario = scenario;
         }
@@ -242,10 +241,9 @@ export const FactoryScene = () => {
 
     let ws: WebSocket | null = null;
     if (token) {
-      const companyParam =
-        role === "superadmin" && selectedCompany
-          ? `&company=${encodeURIComponent(selectedCompany)}`
-          : "";
+      const companyParam = selectedCompany
+        ? `&company=${encodeURIComponent(selectedCompany)}`
+        : "";
       const wsUrl = `${WS_URL}/ws?token=${encodeURIComponent(token)}${companyParam}`;
 
       ws = new WebSocket(wsUrl);
@@ -396,32 +394,63 @@ export const FactoryScene = () => {
         </h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <DigitalClock />
-          
+
           {/* NUMBER OF WORKERS AND RESET BUTTON */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#1e293b', padding: '6px 12px', borderRadius: '6px', border: '1px solid #334155' }}>
-             <span style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 'bold' }}>👷 Workers:</span>
-             <input 
-               type="number" 
-               min="0"
-               max="150"
-               value={agentCount} 
-               onChange={(e) => {
-                 let val = parseInt(e.target.value, 10);
-                 if (isNaN(val)) val = 0;
-                 if (val > 150) val = 110;
-                 if (val < 0) val = 0;
-                 setAgentCount(val);
-               }}
-               disabled={isSimulating}
-               style={{ width: '45px', background: 'transparent', color: 'white', border: 'none', fontWeight: 'bold', outline: 'none' }}
-             />
-             <button 
-               onClick={() => setResetTrigger(prev => prev + 1)}
-               title="İşçileri Resetle"
-               style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', marginLeft: '5px' }}
-             >
-               🔄 RESET
-             </button>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "#1e293b",
+              padding: "6px 12px",
+              borderRadius: "6px",
+              border: "1px solid #334155",
+            }}
+          >
+            <span
+              style={{ color: "#94a3b8", fontSize: "14px", fontWeight: "bold" }}
+            >
+              👷 Workers:
+            </span>
+            <input
+              type="number"
+              min="0"
+              max="150"
+              value={agentCount}
+              onChange={(e) => {
+                let val = parseInt(e.target.value, 10);
+                if (isNaN(val)) val = 0;
+                if (val > 150) val = 110;
+                if (val < 0) val = 0;
+                setAgentCount(val);
+              }}
+              disabled={isSimulating}
+              style={{
+                width: "45px",
+                background: "transparent",
+                color: "white",
+                border: "none",
+                fontWeight: "bold",
+                outline: "none",
+              }}
+            />
+            <button
+              onClick={() => setResetTrigger((prev) => prev + 1)}
+              title="İşçileri Resetle"
+              style={{
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "bold",
+                marginLeft: "5px",
+              }}
+            >
+              🔄 RESET
+            </button>
           </div>
 
           <button
