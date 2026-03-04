@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 
 export const KeyboardMapMover = ({ controlsRef }: { controlsRef: any }) => {
@@ -16,10 +16,10 @@ export const KeyboardMapMover = ({ controlsRef }: { controlsRef: any }) => {
     };
   }, []);
 
-  useFrame((state, delta) => {
+  useFrame((state) => {
     if (!controlsRef.current) return;
     const speed = keys["ShiftLeft"] || keys["ShiftRight"] ? 60 : 25;
-    const step = speed * delta;
+    const step = speed * state.clock.getDelta();
     if (keys["ArrowUp"] || keys["KeyW"]) {
       controlsRef.current.target.z -= step;
       camera.position.z -= step;
