@@ -1,4 +1,4 @@
-import React, { useState, memo, useEffect, useRef } from 'react';
+import { useState, memo, useEffect, useRef } from 'react';
 import { Html, Text } from '@react-three/drei';
 
 const formatValue = (val: any) => {
