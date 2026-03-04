@@ -283,13 +283,21 @@ export const FactoryScene = () => {
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <DigitalClock />
           
-          {/* İŞÇİ SAYISI VE RESET BUTONU */}
+          {/* NUMBER OF WORKERS AND RESET BUTTON */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#1e293b', padding: '6px 12px', borderRadius: '6px', border: '1px solid #334155' }}>
              <span style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 'bold' }}>👷 Workers:</span>
              <input 
                type="number" 
+               min="0"
+               max="150"
                value={agentCount} 
-               onChange={(e) => setAgentCount(Number(e.target.value))}
+               onChange={(e) => {
+                 let val = parseInt(e.target.value, 10);
+                 if (isNaN(val)) val = 0;
+                 if (val > 150) val = 110;
+                 if (val < 0) val = 0;
+                 setAgentCount(val);
+               }}
                disabled={isSimulating}
                style={{ width: '45px', background: 'transparent', color: 'white', border: 'none', fontWeight: 'bold', outline: 'none' }}
              />
