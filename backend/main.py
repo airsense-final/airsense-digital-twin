@@ -1,6 +1,5 @@
 import json
 import os
-import sqlite3
 from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -9,13 +8,17 @@ import asyncio
 from src.integration.websocket_manager import manager 
 from typing import Optional
 from src.mapping.location_service import LocationService
+from pymongo import MongoClient
 
 app = FastAPI()
 locator = LocationService()
 adapter = BackendAdapter()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, "twin_data.db")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+client = MongoClient(MONGO_URI)
 
+db = client["airsense_twin"]
+mappings_collection = db["sensor_mappings"]
 # --- 1. STANDART CORS AYARLARI ---
 app.add_middleware(
     CORSMiddleware,
@@ -41,42 +44,22 @@ async def add_private_network_access_header(request: Request, call_next):
     response.headers["Access-Control-Allow-Origin"] = "https://airsensedigitaltwin.netlify.app"
     return response
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
 
-def init_db():
-    conn = get_db_connection()
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS sensor_mappings (
-            sensor_id TEXT PRIMARY KEY,
-            location_key TEXT NOT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-init_db()
 
 def load_mappings_from_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT sensor_id, location_key FROM sensor_mappings')
-    rows = cursor.fetchall()
-    conn.close()
-    return {row['sensor_id']: row['location_key'] for row in rows}
+    mappings = {}
+    # Tüm kayıtları bul ve sözlük (dictionary) formatına çevir
+    for doc in mappings_collection.find():
+        mappings[doc["sensor_id"]] = doc["location_key"]
+    return mappings
 
 def save_mapping_to_db(sensor_id, location_key):
-    conn = get_db_connection()
-    conn.execute('''
-        INSERT INTO sensor_mappings (sensor_id, location_key) 
-        VALUES (?, ?)
-        ON CONFLICT(sensor_id) DO UPDATE SET location_key=excluded.location_key
-    ''', (sensor_id, location_key))
-    conn.commit()
-    conn.close()
+    # upsert=True sayesinde kayıt varsa günceller, yoksa yeni kayıt oluşturur
+    mappings_collection.update_one(
+        {"sensor_id": sensor_id},
+        {"$set": {"location_key": location_key}},
+        upsert=True
+    )
 
 class MapRequest(BaseModel):
     sensor_id: str
