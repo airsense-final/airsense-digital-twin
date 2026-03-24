@@ -4,3 +4,6 @@ requests
 pymongo
 httpx
 websockets
+pydantic
+loguru
+dnspython
