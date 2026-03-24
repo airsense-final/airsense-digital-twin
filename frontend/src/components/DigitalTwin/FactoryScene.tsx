@@ -47,6 +47,7 @@ export const FactoryScene = () => {
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [estimatedAnomalyPos, setEstimatedAnomalyPos] = useState<any>(null);
   const [heatmapMode, setHeatmapMode] = useState<
     "TEMP" | "HUMIDITY" | "GAS" | "GENERAL"
   >("GENERAL");
@@ -287,6 +288,30 @@ export const FactoryScene = () => {
       };
     }
   }, [selectedCompany, token, role, scenario]);
+
+  // --- ANOMALİ HESAPLAMA MOTORU ---
+  useEffect(() => {
+    // Sadece durumu 'critical' olan sensörleri bul
+    const activeSensors = displaySensors
+      .map((s) => {
+        const criticalLimit = s.thresholds?.critical || 9999;
+        const weight = ((s.value - criticalLimit) / criticalLimit) * 100;
+        return { sensor_id: s.location_name, weight: weight > 0 ? weight : 0 };
+      })
+      .filter((s) => s.weight > 0 && s.sensor_id);
+
+    if (activeSensors.length > 0) {
+      axios
+        .post(`${API_URL}/api/estimate-anomaly`, { active_sensors: activeSensors })
+        .then((res) => {
+          if (res.data.status === "success") {
+            setEstimatedAnomalyPos(res.data.data);
+          }
+        });
+    } else {
+      setEstimatedAnomalyPos(null);
+    }
+  }, [displaySensors]);
 
   const handleUpdateLocation = async (
     sensorId: string,
@@ -858,6 +883,13 @@ export const FactoryScene = () => {
           )}
 
           <FactoryArchitecture />
+
+          {estimatedAnomalyPos && !isSimulating && (
+            <mesh position={[estimatedAnomalyPos.x, estimatedAnomalyPos.y + 3, estimatedAnomalyPos.z]}>
+              <sphereGeometry args={[2, 32, 32]} />
+              <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={2} transparent opacity={0.7} />
+            </mesh>
+          )}
 
           <HeatmapLayer
             sensors={displaySensors}

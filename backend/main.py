@@ -1,19 +1,22 @@
 import json
 import os
 import sqlite3
-from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect, Request, HTTPException
+from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.integration.backend_adapter import BackendAdapter
 import asyncio
 from src.integration.websocket_manager import manager 
 from typing import Optional
+from src.mapping.location_service import LocationService
 
 app = FastAPI()
+locator = LocationService()
 adapter = BackendAdapter()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "twin_data.db")
 
+# --- 1. STANDART CORS AYARLARI ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,6 +24,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- 2. KRİTİK: CHROME "LOOPBACK" ENGELİNİ KIRAN MIDDLEWARE ---
+@app.middleware("http")
+async def add_private_network_access_header(request: Request, call_next):
+    if request.method == "OPTIONS":
+        response = Response()
+        response.headers["Access-Control-Allow-Origin"] = "https://airsensedigitaltwin.netlify.app"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+    
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    response.headers["Access-Control-Allow-Origin"] = "https://airsensedigitaltwin.netlify.app"
+    return response
 
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE)
@@ -67,29 +86,23 @@ class MapRequest(BaseModel):
 def read_root():
     return {"status": "Digital Twin Engine ONLINE", "db": "SQLite"}
 
-# --- EKLENEN KISIM BAŞLANGICI: Threshold Endpoint ---
 @app.get("/api/v1/thresholds/")
 async def proxy_get_thresholds(
     request: Request,
     company: Optional[str] = None,
     scenario: Optional[str] = None
 ):
-    # 1. Token'ı Header'dan al
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         raise HTTPException(status_code=401, detail="Token missing")
     
     token = auth_header.split(" ")[1] if " " in auth_header else auth_header
-
-    # 2. Adapter üzerinden Ana Backend'e sor
     thresholds_data = await adapter.get_thresholds(
         token=token, 
         target_company=company, 
         scenario=scenario
     )
-
     return thresholds_data
-# --- EKLENEN KISIM SONU ---
 
 @app.get("/api/digital-twin-data")
 async def get_digital_twin_data(authorization: str = Header(None), company: str = Query(None)):
@@ -242,3 +255,18 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), comp
         print(f"⚠️ Beklenmedik WS Hatası: {e}")
     finally:
         manager.disconnect(websocket)
+
+
+
+class AnomalyRequest(BaseModel):
+    active_sensors: list
+
+@app.post("/api/estimate-anomaly")
+async def estimate_anomaly(data: AnomalyRequest):
+    try:
+        result = locator.estimate_anomaly_location(data.active_sensors)
+        if result:
+            return {"status": "success", "data": result}
+        return {"status": "error", "message": "Yetersiz veri"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
