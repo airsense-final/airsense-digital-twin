@@ -38,19 +38,18 @@ class BackendAdapter:
         return response
 
     async def get_sensors_metadata(self, token, target_company=None):
+        """Sensörlerin yerleşim ve isim bilgilerini çeker."""
         url = f"{self.base_url}/api/v1/sensors" 
         params = {}
 
-        # 🎯 ŞİRKET GEÇİŞİNİ SAĞLAYAN KRİTİK NOKTA
-        # Eğer bir şirket seçildiyse, ismini parametre olarak ekliyoruz.
+        # 🎯 DÜZELTME: Eğer bir şirket seçildiyse bunu parametre olarak ekle
+        # AirSense Root Company seçiliyse filtre gönderme (hata almamak için)
         if target_company and str(target_company).strip() not in ["None", "null", "undefined", "", "AirSense Root Company"]:
             params["target_company_name"] = str(target_company).strip()
 
         try:
-            # logda ne gönderdiğimizi net görelim
             print(f"🚀 İstek Atılıyor: {url} | Filtre: {params}")
-            
-            # Parametreleri buraya ekledik ki backend hangi şirketi istediğini anlasın
+            # params=params kısmını ekledik ki seçtiğin şirket backend'e gitsin
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             
             print(f"📡 API STATUS: {response.status_code}")
@@ -63,31 +62,22 @@ class BackendAdapter:
             return []
 
     async def get_live_values(self, token, target_company=None):
+        """Sensörlerin anlık ölçüm değerlerini (gaz, sıcaklık vb.) çeker."""
         url = f"{self.base_url}/api/v1/sensors/latest" 
         params = {}
+        
+        # 🎯 DÜZELTME: Canlı veriler için de filtreyi ekliyoruz
         if target_company and str(target_company).strip() not in ["None", "null", "undefined", "", "AirSense Root Company"]:
             params["target_company_name"] = str(target_company).strip()
 
         try:
+            # params=params eklendi
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             if response.status_code in [200, 201]:
                 return response.json()
             return []
         except Exception as e:
-            return []
-
-    async def get_thresholds(self, token, target_company=None, scenario=None):
-        url = f"{self.base_url}/api/v1/thresholds"
-        params = {}
-        if target_company and str(target_company).strip() not in ["None", "null", "undefined", "", "AirSense Root Company"]:
-            params["target_company_name"] = str(target_company).strip()
-            
-        try:
-            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
-            if response.status_code == 200:
-                return response.json()
-            return []
-        except Exception as e:
+            print(f"❌ Canlı Veri Çekilemedi: {e}")
             return []
 
     async def get_companies(self, token=None):
@@ -120,6 +110,17 @@ class BackendAdapter:
         except Exception as e:
             print(f"❌ Lokasyon güncellenemedi: {e}")
             return False
+
+    async def get_thresholds(self, token, target_company=None, scenario=None):
+        """Eşik değerlerini (alarm seviyeleri) çeker."""
+        url = f"{self.base_url}/api/v1/thresholds"
+        try:
+            response = await self._make_request("GET", url, headers=self._get_headers(token))
+            if response.status_code == 200:
+                return response.json()
+            return []
+        except Exception as e:
+            return []
 
     async def close(self):
         """Bağlantıları kapatır (Gerekirse)."""
