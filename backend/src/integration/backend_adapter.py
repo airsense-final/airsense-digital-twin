@@ -70,8 +70,7 @@ class BackendAdapter:
 
     async def get_companies(self, token=None):
         """Sağ üstteki menü için tüm şirket listesini çeker."""
-        # Senin belirttiğin gibi linkte /api yok
-        url = f"{self.base_url}/companies"
+        url = f"{self.base_url}/companies/"
         
         try:
             print(f"🏢 Şirket listesi isteniyor: {url}")
