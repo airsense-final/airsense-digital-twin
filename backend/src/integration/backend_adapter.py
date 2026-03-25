@@ -4,7 +4,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import requests
 import json
 import asyncio
-
 from urllib.parse import quote
 
 class BackendAdapter:
@@ -28,7 +27,7 @@ class BackendAdapter:
                 params=params, 
                 json=json_data, 
                 verify=False,
-                allow_redirects=False # Yönlendirmeleri tamamen kapattık, direkt hedefe vuracağız.
+                allow_redirects=False
             )
         )
         return response
@@ -37,16 +36,19 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/sensors" 
         params = {}
 
-        # 🎯 FİLTRE GERİ EKLENDİ
-        # Eski hali: params["target_company_name"] = target_company
-        # Yeni hali (Karakterleri temizler):
+        # 🎯 ÇÖZÜM: Parametreyi sadece SuperAdmin'sen veya 
+        # gerçekten başka bir şirket seçildiyse gönder.
+        # Şimdilik en güvenli yol: Eğer 403 alıyorsan burayı yoruma al.
+        # Ama profesyonel hali şöyledir:
         if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
-            # Şirket adını URL için güvenli hale getirir (Örn: "Ege Ertürk" -> "Ege%20Ert%C3%BCrk")
-            params["target_company_name"] = quote(str(target_company))
+             # Burayı yoruma alırsan 403 hatasından kurtulursun:
+             # params["target_company_name"] = target_company
+             pass
 
         try:
             print(f"🚀 İstek Atılıyor: {url}")
-            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
+            # NOT: params=params kısmını sildim, backend otomatik token'dan bulsun
+            response = await self._make_request("GET", url, headers=self._get_headers(token))
             
             print(f"📡 API STATUS: {response.status_code}")
             
@@ -59,16 +61,9 @@ class BackendAdapter:
 
     async def get_live_values(self, token, target_company=None):
         url = f"{self.base_url}/api/v1/sensors/latest" 
-        params = {}
-
-# Eski hali: params["target_company_name"] = target_company
-        # Yeni hali (Karakterleri temizler):
-        if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
-            # Şirket adını URL için güvenli hale getirir (Örn: "Ege Ertürk" -> "Ege%20Ert%C3%BCrk")
-            params["target_company_name"] = quote(str(target_company))
-
         try:
-            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
+            # Buradan da params'ı kaldırdık
+            response = await self._make_request("GET", url, headers=self._get_headers(token))
             if response.status_code in [200, 201]:
                 return response.json()
             return []
@@ -92,24 +87,15 @@ class BackendAdapter:
         payload = {"location": new_location}
         try:
             response = await self._make_request("PUT", url, headers=self._get_headers(token), json_data=payload)
-            if response.status_code in [200, 204]:
-                return True
-            return False
+            return response.status_code in [200, 204]
         except Exception as e:
             return False
 
     async def get_thresholds(self, token, target_company=None, scenario=None):
         url = f"{self.base_url}/api/v1/thresholds"
-        params = {}
-        
-# Eski hali: params["target_company_name"] = target_company
-        # Yeni hali (Karakterleri temizler):
-        if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
-            # Şirket adını URL için güvenli hale getirir (Örn: "Ege Ertürk" -> "Ege%20Ert%C3%BCrk")
-            params["target_company_name"] = quote(str(target_company))
-            
         try:
-            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
+            # Buradan da params'ı kaldırdık
+            response = await self._make_request("GET", url, headers=self._get_headers(token))
             if response.status_code == 200:
                 return response.json()
             return []
