@@ -12,10 +12,8 @@ class BackendAdapter:
             "Content-Type": "application/json"
         }
 
-    # Senkron requests'i asenkron yapmak için bu yardımcı fonksiyonu kullanıyoruz
     async def _make_request(self, method, url, headers=None, params=None, json_data=None):
         loop = asyncio.get_event_loop()
-        # requests.request'i arka planda (thread'de) çalıştırır ki sunucu kilitlenmesin
         response = await loop.run_in_executor(
             None, 
             lambda: requests.request(
@@ -24,7 +22,7 @@ class BackendAdapter:
                 headers=headers, 
                 params=params, 
                 json=json_data, 
-                verify=False # SSL hatalarını es geç
+                verify=False
             )
         )
         return response
@@ -37,7 +35,8 @@ class BackendAdapter:
 
         try:
             print(f"🚀 İstek Atılıyor: {url}")
-            response = await self.make_request("GET", url, headers=self._get_headers(token), params=params)
+            # DÜZELTİLDİ: _make_request
+            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             
             print(f"📡 API STATUS: {response.status_code}")
             
@@ -55,7 +54,8 @@ class BackendAdapter:
         #     params["target_company_name"] = target_company
 
         try:
-            response = await self.make_request("GET", url, headers=self._get_headers(token), params=params)
+            # DÜZELTİLDİ: _make_request
+            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             if response.status_code in [200, 201]:
                 return response.json()
             return []
@@ -66,7 +66,8 @@ class BackendAdapter:
     async def get_companies(self):
         url = f"{self.base_url}/companies/"
         try:
-            response = await self.make_request("GET", url)
+            # DÜZELTİLDİ: _make_request
+            response = await self._make_request("GET", url)
             if response.status_code == 200:
                 return response.json()
             return []
@@ -78,7 +79,8 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/sensors/{sensor_id}/"
         payload = {"location": new_location}
         try:
-            response = await self.make_request("PUT", url, headers=self._get_headers(token), json_data=payload)
+            # DÜZELTİLDİ: _make_request
+            response = await self._make_request("PUT", url, headers=self._get_headers(token), json_data=payload)
             if response.status_code in [200, 204]:
                 return True
             return False
@@ -89,7 +91,8 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/thresholds/"
         params = {}
         try:
-            response = await self.make_request("GET", url, headers=self._get_headers(token), params=params)
+            # DÜZELTİLDİ: _make_request
+            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             if response.status_code == 200:
                 return response.json()
             return []
@@ -97,6 +100,4 @@ class BackendAdapter:
             return []
 
     async def close(self):
-        # requests kütüphanesi kalıcı bir oturum açmadığı için
-        # close işleminde yapacak bir şeyimiz yok, içi boş kalabilir.
         pass
