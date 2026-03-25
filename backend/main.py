@@ -89,10 +89,17 @@ async def proxy_get_thresholds(
 
 @app.get("/api/digital-twin-data")
 async def get_digital_twin_data(authorization: str = Header(None), company: str = Query(None)):
+    print(f"🕵️ FRONTEND'DEN GELEN HEADER: {authorization}")
+    
     token = ""
     if authorization:
         clean_auth = authorization.strip()
         token = clean_auth.split(" ")[1] if " " in clean_auth else clean_auth
+        
+    print(f"🕵️ AYIKLANAN TOKEN: {token[:15]}... (uzunluk: {len(token)})")
+    
+    if not token or token == "undefined" or token == "null":
+        print("🚨 KRİTİK HATA: Frontend geçerli bir token GÖNDERMEDİ!")
             
     target_comp = None if (company == "None" or not company) else company
 
