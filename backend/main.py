@@ -253,3 +253,7 @@ async def estimate_anomaly(data: AnomalyRequest):
         return {"status": "error", "message": "Yetersiz veri"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    
+@app.on_event("shutdown")
+async def shutdown_event():
+    await adapter.close()
