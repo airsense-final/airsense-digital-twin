@@ -41,17 +41,16 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/sensors" 
         params = {}
 
-        # 🎯 SUPERADMIN DEĞİŞİMİ BURADA BAŞLIYOR
-        # Eğer bir şirket seçildiyse, ismini 'temiz' bir şekilde gönderiyoruz.
-        # quote() kullanmıyoruz, requests kendisi halletsin.
+        # 🎯 ŞİRKET GEÇİŞİNİ SAĞLAYAN KRİTİK NOKTA
+        # Eğer bir şirket seçildiyse, ismini parametre olarak ekliyoruz.
         if target_company and str(target_company).strip() not in ["None", "null", "undefined", "", "AirSense Root Company"]:
             params["target_company_name"] = str(target_company).strip()
 
         try:
-            # logda ne gönderdiğimizi görelim
+            # logda ne gönderdiğimizi net görelim
             print(f"🚀 İstek Atılıyor: {url} | Filtre: {params}")
             
-            # PARAMS'ı tekrar ekledik!
+            # Parametreleri buraya ekledik ki backend hangi şirketi istediğini anlasın
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             
             print(f"📡 API STATUS: {response.status_code}")
@@ -68,10 +67,24 @@ class BackendAdapter:
         params = {}
         if target_company and str(target_company).strip() not in ["None", "null", "undefined", "", "AirSense Root Company"]:
             params["target_company_name"] = str(target_company).strip()
-            
+
         try:
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             if response.status_code in [200, 201]:
+                return response.json()
+            return []
+        except Exception as e:
+            return []
+
+    async def get_thresholds(self, token, target_company=None, scenario=None):
+        url = f"{self.base_url}/api/v1/thresholds"
+        params = {}
+        if target_company and str(target_company).strip() not in ["None", "null", "undefined", "", "AirSense Root Company"]:
+            params["target_company_name"] = str(target_company).strip()
+            
+        try:
+            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
+            if response.status_code == 200:
                 return response.json()
             return []
         except Exception as e:
@@ -107,17 +120,6 @@ class BackendAdapter:
         except Exception as e:
             print(f"❌ Lokasyon güncellenemedi: {e}")
             return False
-
-    async def get_thresholds(self, token, target_company=None, scenario=None):
-        """Eşik değerlerini (alarm seviyeleri) çeker."""
-        url = f"{self.base_url}/api/v1/thresholds"
-        try:
-            response = await self._make_request("GET", url, headers=self._get_headers(token))
-            if response.status_code == 200:
-                return response.json()
-            return []
-        except Exception as e:
-            return []
 
     async def close(self):
         """Bağlantıları kapatır (Gerekirse)."""
