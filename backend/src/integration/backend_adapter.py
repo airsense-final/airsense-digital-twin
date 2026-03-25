@@ -27,6 +27,11 @@ class BackendAdapter:
 
         try:
             response = await self.client.get(url, headers=self._get_headers(token), params=params)
+
+            print(f"📡 SENSÖR API STATUS KODU: {response.status_code}")
+            print(f"📡 SENSÖR API CEVABI: {response.text}")
+
+            
             if response.status_code in [200, 201]:
                 return response.json()
             return []
