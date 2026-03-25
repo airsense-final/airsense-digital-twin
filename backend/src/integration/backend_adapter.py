@@ -4,7 +4,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import requests
 import json
 import asyncio
-from urllib.parse import quote
 
 class BackendAdapter:
     def __init__(self):
@@ -36,19 +35,14 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/sensors" 
         params = {}
 
-        # 🎯 ÇÖZÜM: Parametreyi sadece SuperAdmin'sen veya 
-        # gerçekten başka bir şirket seçildiyse gönder.
-        # Şimdilik en güvenli yol: Eğer 403 alıyorsan burayı yoruma al.
-        # Ama profesyonel hali şöyledir:
+        # 🎯 SUPER ADMIN İÇİN: Eğer bir şirket seçildiyse parametre ekle
         if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
-             # Burayı yoruma alırsan 403 hatasından kurtulursun:
-             # params["target_company_name"] = target_company
-             pass
+            params["target_company_name"] = str(target_company).strip()
 
         try:
-            print(f"🚀 İstek Atılıyor: {url}")
-            # NOT: params=params kısmını sildim, backend otomatik token'dan bulsun
-            response = await self._make_request("GET", url, headers=self._get_headers(token))
+            print(f"🚀 İstek Atılıyor: {url} | Params: {params}")
+            # params=params ekledik; boşsa zaten etkisizdir.
+            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             
             print(f"📡 API STATUS: {response.status_code}")
             
@@ -61,9 +55,12 @@ class BackendAdapter:
 
     async def get_live_values(self, token, target_company=None):
         url = f"{self.base_url}/api/v1/sensors/latest" 
+        params = {}
+        if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
+            params["target_company_name"] = str(target_company).strip()
+
         try:
-            # Buradan da params'ı kaldırdık
-            response = await self._make_request("GET", url, headers=self._get_headers(token))
+            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             if response.status_code in [200, 201]:
                 return response.json()
             return []
@@ -71,12 +68,21 @@ class BackendAdapter:
             print(f"❌ Canlı Veri Çekilemedi: {e}")
             return []
 
-    async def get_companies(self):
+    async def get_companies(self, token=None): # 🔑 Token desteği eklendi
+        # Linkte api yok dediğin için direkt bağladık
         url = f"{self.base_url}/companies"
+        
+        # 🔑 Şirket listesi için de yetki gerekebilir
+        headers = self._get_headers(token) if token else {}
+        
         try:
-            response = await self._make_request("GET", url)
+            print(f"🏢 Şirket listesi isteniyor: {url}")
+            response = await self._make_request("GET", url, headers=headers)
+            
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                # Backend listeyi direkt mi yoksa bir key içinde mi dönüyor kontrolü
+                return data if isinstance(data, list) else data.get("companies", [])
             return []
         except Exception as e:
             print(f"❌ Şirket Listesi Alınamadı: {e}")
@@ -93,9 +99,12 @@ class BackendAdapter:
 
     async def get_thresholds(self, token, target_company=None, scenario=None):
         url = f"{self.base_url}/api/v1/thresholds"
+        params = {}
+        if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
+            params["target_company_name"] = str(target_company).strip()
+
         try:
-            # Buradan da params'ı kaldırdık
-            response = await self._make_request("GET", url, headers=self._get_headers(token))
+            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             if response.status_code == 200:
                 return response.json()
             return []
