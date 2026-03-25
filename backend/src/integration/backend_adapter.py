@@ -1,3 +1,6 @@
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 import requests
 import json
 import asyncio
@@ -29,9 +32,12 @@ class BackendAdapter:
         return response
 
     async def get_sensors_metadata(self, token, target_company=None):
-        # DİKKAT: Sondaki slash (/) KALDIRILDI!
         url = f"{self.base_url}/api/v1/sensors" 
         params = {}
+
+        # 🎯 FİLTRE GERİ EKLENDİ
+        if target_company and target_company != "None":
+            params["target_company_name"] = target_company
 
         try:
             print(f"🚀 İstek Atılıyor: {url}")
@@ -47,9 +53,12 @@ class BackendAdapter:
             return []
 
     async def get_live_values(self, token, target_company=None):
-        # DİKKAT: Sondaki slash (/) KALDIRILDI!
         url = f"{self.base_url}/api/v1/sensors/latest" 
         params = {}
+
+        # 🎯 FİLTRE GERİ EKLENDİ
+        if target_company and target_company != "None":
+            params["target_company_name"] = target_company
 
         try:
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
@@ -83,9 +92,13 @@ class BackendAdapter:
             return False
 
     async def get_thresholds(self, token, target_company=None, scenario=None):
-        # DİKKAT: Orijinal kodunda burada slash vardı, onu da kaldırdık!
         url = f"{self.base_url}/api/v1/thresholds"
         params = {}
+        
+        # 🎯 FİLTRE GERİ EKLENDİ
+        if target_company and target_company != "None":
+            params["target_company_name"] = target_company
+            
         try:
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             if response.status_code == 200:
