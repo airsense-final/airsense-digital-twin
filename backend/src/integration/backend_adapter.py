@@ -22,8 +22,8 @@ class BackendAdapter:
         # 2. DÜZELTME: URL'in sonuna / eklendi
         url = f"{self.base_url}/api/v1/sensors/" 
         params = {}
-        if target_company:
-            params["target_company_name"] = target_company
+       # if target_company:
+        #    params["target_company_name"] = target_company
 
         try:
             response = await self.client.get(url, headers=self._get_headers(token), params=params)
@@ -38,8 +38,8 @@ class BackendAdapter:
         # 3. DÜZELTME: URL'in sonuna / eklendi
         url = f"{self.base_url}/api/v1/sensors/latest/" 
         params = {}
-        if target_company:
-            params["target_company_name"] = target_company
+        #if target_company:
+         #   params["target_company_name"] = target_company
 
         try:
             response = await self.client.get(url, headers=self._get_headers(token), params=params)
@@ -80,8 +80,8 @@ class BackendAdapter:
     async def get_thresholds(self, token, target_company=None, scenario=None):
         url = f"{self.base_url}/api/v1/thresholds/"
         params = {}
-        if target_company:
-            params["target_company_name"] = target_company
+       # if target_company:
+       #     params["target_company_name"] = target_company
         if scenario:
             params["scenario"] = scenario
 
