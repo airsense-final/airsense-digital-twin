@@ -5,6 +5,8 @@ import requests
 import json
 import asyncio
 
+from urllib.parse import quote
+
 class BackendAdapter:
     def __init__(self):
         self.base_url = "https://airsenseapi.com" 
@@ -36,8 +38,11 @@ class BackendAdapter:
         params = {}
 
         # 🎯 FİLTRE GERİ EKLENDİ
-        if target_company and target_company != "None":
-            params["target_company_name"] = target_company
+        # Eski hali: params["target_company_name"] = target_company
+        # Yeni hali (Karakterleri temizler):
+        if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
+            # Şirket adını URL için güvenli hale getirir (Örn: "Ege Ertürk" -> "Ege%20Ert%C3%BCrk")
+            params["target_company_name"] = quote(str(target_company))
 
         try:
             print(f"🚀 İstek Atılıyor: {url}")
@@ -56,9 +61,11 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/sensors/latest" 
         params = {}
 
-        # 🎯 FİLTRE GERİ EKLENDİ
-        if target_company and target_company != "None":
-            params["target_company_name"] = target_company
+# Eski hali: params["target_company_name"] = target_company
+        # Yeni hali (Karakterleri temizler):
+        if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
+            # Şirket adını URL için güvenli hale getirir (Örn: "Ege Ertürk" -> "Ege%20Ert%C3%BCrk")
+            params["target_company_name"] = quote(str(target_company))
 
         try:
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
@@ -95,9 +102,11 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/thresholds"
         params = {}
         
-        # 🎯 FİLTRE GERİ EKLENDİ
-        if target_company and target_company != "None":
-            params["target_company_name"] = target_company
+# Eski hali: params["target_company_name"] = target_company
+        # Yeni hali (Karakterleri temizler):
+        if target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]:
+            # Şirket adını URL için güvenli hale getirir (Örn: "Ege Ertürk" -> "Ege%20Ert%C3%BCrk")
+            params["target_company_name"] = quote(str(target_company))
             
         try:
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
