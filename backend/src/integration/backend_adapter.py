@@ -41,27 +41,29 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/sensors" 
         params = {}
 
-        # 🎯 ZEKA BURADA: 
-        # Normal kullanıcıda target_company ya None gelir ya da kendi şirketi gelir.
-        # Süperadmin bir şirket SEÇTİĞİNDE (Root Company harici) parametre yolluyoruz.
-        
+        # 🎯 Sadece root harici bir seçim varsa parametre ekle
         is_root = str(target_company).strip() == "AirSense Root Company"
         has_selection = target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]
 
         if has_selection and not is_root:
-            # Sadece Süperadmin bir şirket seçtiğinde burası çalışır.
-            # Normal kullanıcı kendi şirketindeyken parametre gitmez (403'ten kaçar).
             params["target_company_name"] = str(target_company).strip()
 
         try:
             print(f"🚀 İstek: {url} | Filtre: {params}")
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             
+            # 🛡️ KRİTİK FALLBACK: Eğer parametre yüzünden 403 alırsak (Normal kullanıcı hatası)
+            # parametreyi silip isteği tekrar atıyoruz.
+            if response.status_code == 403 and params:
+                print("⚠️ Parametre 403 verdi (Normal Kullanıcı), parametresiz deneniyor...")
+                response = await self._make_request("GET", url, headers=self._get_headers(token))
+
             print(f"📡 API STATUS: {response.status_code}")
             if response.status_code in [200, 201]:
                 return response.json()
             return []
         except Exception as e:
+            print(f"❌ Metadata Hatası: {e}")
             return []
 
     async def get_live_values(self, token, target_company=None):
@@ -76,7 +78,35 @@ class BackendAdapter:
 
         try:
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
+            
+            # 🛡️ Aynı Fallback burada da var
+            if response.status_code == 403 and params:
+                response = await self._make_request("GET", url, headers=self._get_headers(token))
+
             if response.status_code in [200, 201]:
+                return response.json()
+            return []
+        except Exception as e:
+            return []
+
+    async def get_thresholds(self, token, target_company=None, scenario=None):
+        url = f"{self.base_url}/api/v1/thresholds"
+        params = {}
+        
+        is_root = str(target_company).strip() == "AirSense Root Company"
+        has_selection = target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]
+
+        if has_selection and not is_root:
+            params["target_company_name"] = str(target_company).strip()
+
+        try:
+            response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
+            
+            # 🛡️ Thresholds için de 403 koruması
+            if response.status_code == 403 and params:
+                response = await self._make_request("GET", url, headers=self._get_headers(token))
+
+            if response.status_code == 200:
                 return response.json()
             return []
         except Exception as e:
@@ -112,17 +142,6 @@ class BackendAdapter:
         except Exception as e:
             print(f"❌ Lokasyon güncellenemedi: {e}")
             return False
-
-    async def get_thresholds(self, token, target_company=None, scenario=None):
-        """Eşik değerlerini (alarm seviyeleri) çeker."""
-        url = f"{self.base_url}/api/v1/thresholds"
-        try:
-            response = await self._make_request("GET", url, headers=self._get_headers(token))
-            if response.status_code == 200:
-                return response.json()
-            return []
-        except Exception as e:
-            return []
 
     async def close(self):
         """Bağlantıları kapatır (Gerekirse)."""
