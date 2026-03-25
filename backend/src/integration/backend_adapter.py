@@ -38,46 +38,48 @@ class BackendAdapter:
         return response
 
     async def get_sensors_metadata(self, token, target_company=None):
-        """Sensörlerin yerleşim ve isim bilgilerini çeker."""
         url = f"{self.base_url}/api/v1/sensors" 
         params = {}
 
-        # 🎯 DÜZELTME: Eğer bir şirket seçildiyse bunu parametre olarak ekle
-        # AirSense Root Company seçiliyse filtre gönderme (hata almamak için)
-        if target_company and str(target_company).strip() not in ["None", "null", "undefined", "", "AirSense Root Company"]:
+        # 🎯 ZEKA BURADA: 
+        # Normal kullanıcıda target_company ya None gelir ya da kendi şirketi gelir.
+        # Süperadmin bir şirket SEÇTİĞİNDE (Root Company harici) parametre yolluyoruz.
+        
+        is_root = str(target_company).strip() == "AirSense Root Company"
+        has_selection = target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]
+
+        if has_selection and not is_root:
+            # Sadece Süperadmin bir şirket seçtiğinde burası çalışır.
+            # Normal kullanıcı kendi şirketindeyken parametre gitmez (403'ten kaçar).
             params["target_company_name"] = str(target_company).strip()
 
         try:
-            print(f"🚀 İstek Atılıyor: {url} | Filtre: {params}")
-            # params=params kısmını ekledik ki seçtiğin şirket backend'e gitsin
+            print(f"🚀 İstek: {url} | Filtre: {params}")
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             
             print(f"📡 API STATUS: {response.status_code}")
-            
             if response.status_code in [200, 201]:
                 return response.json()
             return []
         except Exception as e:
-            print(f"❌ Metadata Çekilemedi: {e}")
             return []
 
     async def get_live_values(self, token, target_company=None):
-        """Sensörlerin anlık ölçüm değerlerini (gaz, sıcaklık vb.) çeker."""
         url = f"{self.base_url}/api/v1/sensors/latest" 
         params = {}
         
-        # 🎯 DÜZELTME: Canlı veriler için de filtreyi ekliyoruz
-        if target_company and str(target_company).strip() not in ["None", "null", "undefined", "", "AirSense Root Company"]:
+        is_root = str(target_company).strip() == "AirSense Root Company"
+        has_selection = target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]
+
+        if has_selection and not is_root:
             params["target_company_name"] = str(target_company).strip()
 
         try:
-            # params=params eklendi
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
             if response.status_code in [200, 201]:
                 return response.json()
             return []
         except Exception as e:
-            print(f"❌ Canlı Veri Çekilemedi: {e}")
             return []
 
     async def get_companies(self, token=None):
