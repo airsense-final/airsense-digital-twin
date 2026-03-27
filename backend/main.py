@@ -1,30 +1,40 @@
 import json
 import os
+import asyncio
+from typing import Optional
 from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from src.integration.backend_adapter import BackendAdapter
-import asyncio
-from src.integration.websocket_manager import manager 
-from typing import Optional
-from src.mapping.location_service import LocationService
+from pydantic import BaseModel, Field
 from pymongo import MongoClient
+
+from src.integration.backend_adapter import BackendAdapter
+from src.integration.websocket_manager import manager 
+from src.mapping.location_service import LocationService
 
 app = FastAPI()
 locator = LocationService()
 adapter = BackendAdapter()
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 client = MongoClient(MONGO_URI)
-
 db = client["airsense_twin"]
 mappings_collection = db["sensor_mappings"]
-# --- 1. STANDART CORS AYARLARI ---
+
+# --- 1. HARDENED CORS SETTINGS ---
+ALLOWED_ORIGINS = [
+    "https://airsensedigitaltwin.netlify.app",
+    "https://airsenseapi.com",
+    "https://twin.airsenseapi.com",
+    "http://localhost:5173",
+    "http://localhost:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -32,18 +42,12 @@ app.add_middleware(
 @app.middleware("http")
 async def add_private_network_access_header(request: Request, call_next):
     origin = request.headers.get("origin")
-    allowed_origins = [
-        "https://airsensedigitaltwin.netlify.app",
-        "http://localhost:5173",
-        "http://localhost:3000"
-    ]
-    
-    selected_origin = origin if origin in allowed_origins else "https://airsensedigitaltwin.netlify.app"
+    selected_origin = origin if origin in ALLOWED_ORIGINS else "https://airsensedigitaltwin.netlify.app"
 
     if request.method == "OPTIONS":
         response = Response()
         response.headers["Access-Control-Allow-Origin"] = selected_origin
-        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Allow-Private-Network"] = "true"
         return response
@@ -52,8 +56,6 @@ async def add_private_network_access_header(request: Request, call_next):
     response.headers["Access-Control-Allow-Private-Network"] = "true"
     response.headers["Access-Control-Allow-Origin"] = selected_origin
     return response
-
-
 
 def load_mappings_from_db():
     mappings = {}
@@ -71,12 +73,12 @@ def save_mapping_to_db(sensor_id, location_key):
     )
 
 class MapRequest(BaseModel):
-    sensor_id: str
-    location_key: str
+    sensor_id: str = Field(..., pattern=r"^[a-zA-Z0-9_\-:]+$")
+    location_key: str = Field(..., pattern=r"^[a-zA-Z0-9_\-]+$")
 
 @app.get("/")
 def read_root():
-    return {"status": "Digital Twin Engine ONLINE", "db": "SQLite"}
+    return {"status": "Digital Twin Engine ONLINE", "db": "MongoDB"}
 
 @app.get("/api/v1/thresholds/")
 async def proxy_get_thresholds(
@@ -248,8 +250,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), comp
     finally:
         manager.disconnect(websocket)
 
-
-
 class AnomalyRequest(BaseModel):
     active_sensors: list
 
@@ -259,7 +259,7 @@ async def estimate_anomaly(data: AnomalyRequest):
         result = locator.estimate_anomaly_location(data.active_sensors)
         if result:
             return {"status": "success", "data": result}
-        return {"status": "error", "message": "Yetersiz veri"}
+        return {"status": "error", "message": "Insufficient data"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     

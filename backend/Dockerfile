@@ -20,14 +20,20 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Builder katmanından paketleri kopyala
+# Security: Create a non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+# Copy packages from builder
 COPY --from=builder /install /usr/local
 
 # Copy all codes
 COPY . .
 
-# Create logs directory
-RUN mkdir -p logs && chmod 777 logs
+# Create logs directory and set permissions
+RUN mkdir -p logs && chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
 
 EXPOSE 10002
 
