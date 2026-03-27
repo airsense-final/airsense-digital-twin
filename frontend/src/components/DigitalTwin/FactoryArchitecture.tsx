@@ -19,19 +19,19 @@ export const FactoryArchitecture = () => {
 
   return (
     <group>
-      {/* Zemin */}
+      {/* Floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[floorSize, floorSize]} />
         <meshStandardMaterial color={floorColor} roughness={0.6} metalness={0.1} />
       </mesh>
 
-      {/* Tavan */}
+      {/* Ceiling */}
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, wallHeight, 0]} receiveShadow>
         <planeGeometry args={[floorSize, floorSize]} />
         <meshStandardMaterial color={ceilingColor} roughness={0.9} side={THREE.DoubleSide}/>
       </mesh>
       
-      {/* Yan Duvarlar */}
+      {/* Side Walls */}
       <mesh position={[-floorSize / 2, wallHeight / 2, 0]} receiveShadow>
         <boxGeometry args={[wallThickness, wallHeight, floorSize]} />
         <meshStandardMaterial color={wallColor} />
@@ -41,7 +41,7 @@ export const FactoryArchitecture = () => {
         <meshStandardMaterial color={wallColor} />
       </mesh>
 
-      {/* ARKA DUVAR VE PENCERE TASARIMI */}
+      {/* BACK WALL AND WINDOW DESIGN */}
       <group position={[0, 0, -floorSize / 2]}>
         <mesh position={[0, (wallHeight + (windowHeight + 6)) / 2, 0]} receiveShadow>
           <boxGeometry args={[floorSize, wallHeight - (windowHeight + 6), wallThickness]} />
@@ -60,13 +60,13 @@ export const FactoryArchitecture = () => {
           <meshStandardMaterial color={wallColor} />
         </mesh>
 
-        {/* CAM PENCERE */}
+        {/* GLASS WINDOW */}
         <group position={[0, windowHeight / 2 + 6, 0]}>
           <mesh>
             <boxGeometry args={[windowWidth, windowHeight, 0.2]} />
             <meshStandardMaterial color="#a5f3fc" transparent opacity={0.4} metalness={0.9} roughness={0.1} />
           </mesh>
-          {/* Pencere Çerçeveleri */}
+          {/* Window Frames */}
           <mesh position={[0, windowHeight / 2, 0]}>
             <boxGeometry args={[windowWidth + 0.5, 0.5, 0.5]} />
             <meshStandardMaterial color={metalColor} />
@@ -83,7 +83,7 @@ export const FactoryArchitecture = () => {
             <boxGeometry args={[0.5, windowHeight, 0.5]} />
             <meshStandardMaterial color={metalColor} />
           </mesh>
-          {/* Orta Kayıtlar */}
+          {/* Vertical Mullions */}
           {[-1, 0, 1].map((i) => (
             <mesh key={`window-divider-${i}`} position={[(windowWidth / 4) * i, 0, 0]}>
               <boxGeometry args={[0.3, windowHeight, 0.4]} />
@@ -93,7 +93,7 @@ export const FactoryArchitecture = () => {
         </group>
       </group>
 
-      {/* ÖN DUVAR VE FABRİKA KAPISI */}
+      {/* FRONT WALL AND FACTORY DOOR */}
       <group position={[0, 0, floorSize / 2]}>
         <mesh position={[0, (wallHeight + doorHeight) / 2, 0]} receiveShadow>
           <boxGeometry args={[floorSize, wallHeight - doorHeight, wallThickness]} />
@@ -145,7 +145,7 @@ export const FactoryArchitecture = () => {
         </group>
       </group>
 
-      {/* Kolonlar */}
+      {/* Columns */}
       {[-40, 40].map((x) => ( [-30, 0, 30].map((z) => (
         <group key={`col-${x}-${z}`} position={[x, wallHeight / 2, z]}>
           <mesh castShadow receiveShadow>
@@ -159,7 +159,7 @@ export const FactoryArchitecture = () => {
         </group>
       ))))}
 
-      {/* Tavan Makasları */}
+      {/* Roof Trusses */}
       {[-30, -10, 10, 30].map((zPos) => (
         <group key={`truss-${zPos}`} position={[0, wallHeight - 1.5, zPos]}>
           <mesh castShadow><boxGeometry args={[floorSize, 0.8, 0.8]} /><meshStandardMaterial color={metalColor} metalness={0.7} roughness={0.2} /></mesh>
@@ -172,13 +172,13 @@ export const FactoryArchitecture = () => {
         </group>
       ))}
 
-      {/* Borular */}
+      {/* Pipes */}
       <mesh position={[-floorSize / 2 + 4, wallHeight - 4, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
         <cylinderGeometry args={[2, 2, floorSize, 16]} />
         <meshStandardMaterial color="#cbd5e1" metalness={0.5} roughness={0.4} />
       </mesh>
       
-      {/* Depo */}
+      {/* Storage */}
       <group position={[-45, 2, -45]}>
         <mesh position={[0, 0, 0]} castShadow><boxGeometry args={[5, 4, 5]} /><meshStandardMaterial color="#b45309" /></mesh>
         <mesh position={[6, -1, 0]} castShadow><boxGeometry args={[4, 2, 4]} /><meshStandardMaterial color="#d97706" /></mesh>

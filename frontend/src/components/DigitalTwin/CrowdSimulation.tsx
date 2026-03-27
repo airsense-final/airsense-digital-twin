@@ -3,11 +3,11 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Html } from "@react-three/drei";
 
-const FLOOR_LIMIT = 48; // Kapıları duvarlara (dışa) itmek için genişlettik
+const FLOOR_LIMIT = 48; // Expanded to push doors to the walls (outward)
 
 const EXITS = [
-  { pos: new THREE.Vector3(-FLOOR_LIMIT, 0, 0), rot: [0, Math.PI / 2, 0] }, // Sol
-  { pos: new THREE.Vector3(FLOOR_LIMIT, 0, 0), rot: [0, -Math.PI / 2, 0] }, // Sağ
+  { pos: new THREE.Vector3(-FLOOR_LIMIT, 0, 0), rot: [0, Math.PI / 2, 0] }, // Left
+  { pos: new THREE.Vector3(FLOOR_LIMIT, 0, 0), rot: [0, -Math.PI / 2, 0] }, // Right
 ];
 
 interface CrowdSimulationProps {
@@ -15,25 +15,25 @@ interface CrowdSimulationProps {
   hazardPosition: { x: number; y: number; z: number } | null;
   onStatsUpdate: (stats: { alive: number; safe: number; injured: number; dead: number }) => void;
   agentCount: number;
-  resetTrigger: number; // YENİ: Reset butonu için tetikleyici
+  resetTrigger: number; // NEW: Trigger for reset button
 }
 
 export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, agentCount, resetTrigger }: CrowdSimulationProps) => {
   
-  // Ajanları kullanıcı sayısına ve resetTrigger'a göre dinamik oluştur
+  // Dynamically create agents based on count and resetTrigger
   const agents = useMemo(() => {
     return Array.from({ length: agentCount }).map((_, i) => ({
       id: i,
       position: new THREE.Vector3(
-        (Math.random() - 0.5) * (FLOOR_LIMIT - 5) * 2, // Kapıların dibinde doğmasınlar
+        (Math.random() - 0.5) * (FLOOR_LIMIT - 5) * 2, // Prevent spawning right at the doors
         0, 
         (Math.random() - 0.5) * (FLOOR_LIMIT - 5) * 2
       ),
       target: new THREE.Vector3(),
       status: "idle" as "idle" | "evacuating" | "injured" | "dead" | "safe",
-      speed: 0.25 + Math.random() * 0.15, // Koşma hızı
+      speed: 0.25 + Math.random() * 0.15, // Running speed
     }));
-  }, [agentCount, resetTrigger]); // Reset butonu basılınca herkes yeniden doğar
+  }, [agentCount, resetTrigger]); // Everyone respawns when reset button is pressed
 
   const groupRefs = useRef<THREE.Group[]>([]);
   let lastUpdate = 0;
@@ -62,18 +62,18 @@ export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, ag
         if (distToHazard < 10) {
           agent.status = "dead";
           agent.speed = 0;
-          agentGroup.rotation.x = Math.PI / 2; // Yere düşme
+          agentGroup.rotation.x = Math.PI / 2; // Falling down
           agentGroup.position.y = 0.5;
         } else if (distToHazard < 22) {
           agent.status = "injured";
-          agent.speed = 0.05; // Yaralılar topallayarak yavaş kaçar
+          agent.speed = 0.05; // Injured flee slowly by limping
         } else if (agent.status !== "injured") {
           agent.status = "evacuating";
         }
       } else if (!isEmergency && agent.status !== "idle") {
         agent.status = "idle";
         agent.speed = 0.25 + Math.random() * 0.15;
-        agentGroup.rotation.x = 0; // Ayağa kalk
+        agentGroup.rotation.x = 0; // Stand up
       }
 
       if (agent.status === "evacuating" || agent.status === "injured") {
@@ -106,7 +106,7 @@ export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, ag
         }
         if (agent.position.distanceTo(agent.target) > 1) {
           const direction = agent.target.clone().sub(agent.position).normalize();
-          agent.position.add(direction.multiplyScalar(0.04)); // Normal gezinme hızı
+          agent.position.add(direction.multiplyScalar(0.04)); // Normal wandering speed
           agentGroup.lookAt(agent.position.clone().add(direction)); 
         }
       }
@@ -114,14 +114,14 @@ export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, ag
       agentGroup.position.copy(agent.position);
       if (agent.status === "dead") agentGroup.position.y = 0.5; 
       
-      // Gövde Rengini Güncelleme (Gövde mesh'i name="body" ile seçiliyor)
+      // Update Body Color (Body mesh selected by name="body")
       const bodyMesh = agentGroup.getObjectByName("body") as THREE.Mesh;
       if (bodyMesh) {
         const mat = bodyMesh.material as THREE.MeshStandardMaterial;
-        if (agent.status === "dead") mat.color.setHex(0x111111); // Siyah
-        else if (agent.status === "injured") mat.color.setHex(0xef4444); // Kırmızı
-        else if (agent.status === "evacuating") mat.color.setHex(0xeab308); // Sarı
-        else mat.color.setHex(0xf97316); // Normal Gövde Rengi (Turuncu)
+        if (agent.status === "dead") mat.color.setHex(0x111111); // Black
+        else if (agent.status === "injured") mat.color.setHex(0xef4444); // Red
+        else if (agent.status === "evacuating") mat.color.setHex(0xeab308); // Yellow
+        else mat.color.setHex(0xf97316); // Normal Body Color (Orange)
       }
 
       if (agent.status === "idle" || agent.status === "evacuating") aliveCount++;
@@ -136,30 +136,30 @@ export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, ag
 
   return (
     <group>
-      {/* 3D GERÇEKÇİ ACİL ÇIKIŞ KAPILARI */}
+      {/* 3D REALISTIC EMERGENCY EXIT DOORS */}
       {EXITS.map((exit, idx) => (
         <group key={`exit-${idx}`} position={exit.pos} rotation={exit.rot as any}>
-           {/* Kapı Kasası */}
+           {/* Door Frame */}
            <mesh position={[0, 3, 0]}>
              <boxGeometry args={[4.4, 6, 0.4]} />
              <meshStandardMaterial color="#334155" />
            </mesh>
-           {/* Sol Camlı Kapı Kanadı */}
+           {/* Left Glass Door Leaf */}
            <mesh position={[-1.05, 3, 0]}>
              <boxGeometry args={[2, 5.8, 0.2]} />
              <meshStandardMaterial color="#94a3b8" metalness={0.8} roughness={0.2} transparent opacity={0.6} />
            </mesh>
-           {/* Sağ Camlı Kapı Kanadı */}
+           {/* Right Glass Door Leaf */}
            <mesh position={[1.05, 3, 0]}>
              <boxGeometry args={[2, 5.8, 0.2]} />
              <meshStandardMaterial color="#94a3b8" metalness={0.8} roughness={0.2} transparent opacity={0.6} />
            </mesh>
-           {/* Kapı Üstü Işıklı Tabela Kasası */}
+           {/* Lighted Sign Box above Door */}
            <mesh position={[0, 6.4, 0.2]}>
              <boxGeometry args={[2.5, 0.8, 0.1]} />
              <meshStandardMaterial color={isEmergency ? "#22c55e" : "#0f172a"} emissive={isEmergency ? "#22c55e" : "#000000"} emissiveIntensity={2} />
            </mesh>
-           {/* Tabela Yazısı */}
+           {/* Signage Text */}
            <Html position={[0, 6.4, 0.3]} center transform distanceFactor={15}>
              <div style={{ color: isEmergency ? 'white' : '#475569', fontWeight: 'bold', fontSize: '32px', fontFamily: 'sans-serif', letterSpacing: '2px', textShadow: isEmergency ? '0 0 15px #22c55e' : 'none' }}>
                EXIT
@@ -168,10 +168,10 @@ export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, ag
         </group>
       ))}
 
-      {/* GERÇEKÇİ İŞÇİ MODELİ (SENİN KODUNUN AYNISI EKLENDİ) */}
+      {/* REALISTIC WORKER MODEL */}
       {agents.map((agent, i) => (
         <group key={agent.id} ref={(el) => { if (el) groupRefs.current[i] = el; }} position={agent.position}>
-          {/* Bacaklar */}
+          {/* Legs */}
           <mesh position={[-0.25, 1, 0]} castShadow>
             <boxGeometry args={[0.4, 2, 0.4]} />
             <meshStandardMaterial color="#1e3a8a" />
@@ -180,12 +180,12 @@ export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, ag
             <boxGeometry args={[0.4, 2, 0.4]} />
             <meshStandardMaterial color="#1e3a8a" />
           </mesh>
-          {/* Gövde (Renk değişimi için name="body" verildi) */}
+          {/* Torso (name="body" given for color change) */}
           <mesh name="body" position={[0, 2.8, 0]} castShadow>
             <boxGeometry args={[0.9, 1.6, 0.5]} />
             <meshStandardMaterial color="#f97316" />
           </mesh>
-          {/* Reflektörler */}
+          {/* Reflectors */}
           <mesh position={[0, 3, 0.26]}>
             <boxGeometry args={[0.9, 0.1, 0.05]} />
             <meshStandardMaterial color="#e5e7eb" emissive="#ffffff" emissiveIntensity={0.2} />
@@ -194,7 +194,7 @@ export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, ag
             <boxGeometry args={[0.9, 0.1, 0.05]} />
             <meshStandardMaterial color="#e5e7eb" emissive="#ffffff" emissiveIntensity={0.2} />
           </mesh>
-          {/* Kollar */}
+          {/* Arms */}
           <mesh position={[-0.6, 2.8, 0]} castShadow>
             <boxGeometry args={[0.3, 1.4, 0.3]} />
             <meshStandardMaterial color="#334155" />
@@ -203,7 +203,7 @@ export const CrowdSimulation = ({ isEmergency, hazardPosition, onStatsUpdate, ag
             <boxGeometry args={[0.3, 1.4, 0.3]} />
             <meshStandardMaterial color="#334155" />
           </mesh>
-          {/* Kafa ve Baret */}
+          {/* Head and Helmet */}
           <mesh position={[0, 3.8, 0]} castShadow>
             <sphereGeometry args={[0.35, 16, 16]} />
             <meshStandardMaterial color="#ffdbac" />

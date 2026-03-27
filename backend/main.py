@@ -1,60 +1,71 @@
 import json
 import os
+import asyncio
+from typing import Optional
 from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect, Request, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from src.integration.backend_adapter import BackendAdapter
-import asyncio
-from src.integration.websocket_manager import manager 
-from typing import Optional
-from src.mapping.location_service import LocationService
+from pydantic import BaseModel, Field
 from pymongo import MongoClient
+
+from src.integration.backend_adapter import BackendAdapter
+from src.integration.websocket_manager import manager 
+from src.mapping.location_service import LocationService
 
 app = FastAPI()
 locator = LocationService()
 adapter = BackendAdapter()
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 client = MongoClient(MONGO_URI)
-
 db = client["airsense_twin"]
 mappings_collection = db["sensor_mappings"]
-# --- 1. STANDART CORS AYARLARI ---
+
+# --- 1. HARDENED CORS SETTINGS ---
+ALLOWED_ORIGINS = [
+    "https://airsensedigitaltwin.netlify.app",
+    "https://airsenseapi.com",
+    "https://twin.airsenseapi.com",
+    "http://localhost:5173",
+    "http://localhost:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# --- 2. KRİTİK: CHROME "LOOPBACK" ENGELİNİ KIRAN MIDDLEWARE ---
+# --- 2. CRITICAL: MIDDLEWARE BREAKING CHROME "LOOPBACK" RESTRICTION ---
 @app.middleware("http")
 async def add_private_network_access_header(request: Request, call_next):
+    origin = request.headers.get("origin")
+    selected_origin = origin if origin in ALLOWED_ORIGINS else "https://airsensedigitaltwin.netlify.app"
+
     if request.method == "OPTIONS":
         response = Response()
-        response.headers["Access-Control-Allow-Origin"] = "https://airsensedigitaltwin.netlify.app"
-        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Origin"] = selected_origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Allow-Private-Network"] = "true"
         return response
     
     response = await call_next(request)
     response.headers["Access-Control-Allow-Private-Network"] = "true"
-    response.headers["Access-Control-Allow-Origin"] = "https://airsensedigitaltwin.netlify.app"
+    response.headers["Access-Control-Allow-Origin"] = selected_origin
     return response
-
-
 
 def load_mappings_from_db():
     mappings = {}
-    # Tüm kayıtları bul ve sözlük (dictionary) formatına çevir
+    # Find all records and convert to dictionary format
     for doc in mappings_collection.find():
         mappings[doc["sensor_id"]] = doc["location_key"]
     return mappings
 
 def save_mapping_to_db(sensor_id, location_key):
-    # upsert=True sayesinde kayıt varsa günceller, yoksa yeni kayıt oluşturur
+    # upsert=True updates if record exists, creates new if not
     mappings_collection.update_one(
         {"sensor_id": sensor_id},
         {"$set": {"location_key": location_key}},
@@ -62,12 +73,12 @@ def save_mapping_to_db(sensor_id, location_key):
     )
 
 class MapRequest(BaseModel):
-    sensor_id: str
-    location_key: str
+    sensor_id: str = Field(..., pattern=r"^[a-zA-Z0-9_\-:]+$")
+    location_key: str = Field(..., pattern=r"^[a-zA-Z0-9_\-]+$")
 
 @app.get("/")
 def read_root():
-    return {"status": "Digital Twin Engine ONLINE", "db": "SQLite"}
+    return {"status": "Digital Twin Engine ONLINE", "db": "MongoDB"}
 
 @app.get("/api/v1/thresholds/")
 async def proxy_get_thresholds(
@@ -215,7 +226,7 @@ def get_room_config():
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), company: str = Query(None)):
     target_comp = None if (company == "None" or not company) else company
     await manager.connect(websocket)
-    print(f"🔌 WebSocket Bağlantısı Kuruldu. Şirket: {target_comp}")
+    print(f"🔌 WebSocket Connection Established. Company: {target_comp}")
     
     try:
         while True:
@@ -227,19 +238,17 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), comp
                         "data": live_data
                     })
             except Exception as inner_e:
-                print(f"⚠️ İletişim koptu: {inner_e}")
+                print(f"⚠️ Communication lost: {inner_e}")
                 break 
 
             await asyncio.sleep(1) 
 
     except WebSocketDisconnect:
-        print("❌ İstemci tarayıcıyı kapattı.")
+        print("❌ Client closed the browser.")
     except Exception as e:
-        print(f"⚠️ Beklenmedik WS Hatası: {e}")
+        print(f"⚠️ Unexpected WS Error: {e}")
     finally:
         manager.disconnect(websocket)
-
-
 
 class AnomalyRequest(BaseModel):
     active_sensors: list
@@ -250,7 +259,7 @@ async def estimate_anomaly(data: AnomalyRequest):
         result = locator.estimate_anomaly_location(data.active_sensors)
         if result:
             return {"status": "success", "data": result}
-        return {"status": "error", "message": "Yetersiz veri"}
+        return {"status": "error", "message": "Insufficient data"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     

@@ -8,11 +8,11 @@ from urllib.parse import quote
 
 class BackendAdapter:
     def __init__(self):
-        # Ana backend adresi
+        # Main backend address
         self.base_url = "https://airsenseapi.com" 
 
     def _get_headers(self, token):
-        """Header'lara Bearer Token ekler."""
+        """Adds Bearer Token to headers."""
         if not token:
             return {"Content-Type": "application/json"}
         return {
@@ -21,7 +21,7 @@ class BackendAdapter:
         }
 
     async def _make_request(self, method, url, headers=None, params=None, json_data=None):
-        """Requests kütüphanesini asenkron çalıştırır."""
+        """Runs the requests library asynchronously."""
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
             None, 
@@ -41,7 +41,7 @@ class BackendAdapter:
         url = f"{self.base_url}/api/v1/sensors" 
         params = {}
 
-        # 🎯 Sadece root harici bir seçim varsa parametre ekle
+        # 🎯 Add parameter only if there's a selection other than root
         is_root = str(target_company).strip() == "AirSense Root Company"
         has_selection = target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]
 
@@ -49,13 +49,13 @@ class BackendAdapter:
             params["target_company_name"] = str(target_company).strip()
 
         try:
-            print(f"🚀 İstek: {url} | Filtre: {params}")
+            print(f"🚀 Request: {url} | Filter: {params}")
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
-            
-            # 🛡️ KRİTİK FALLBACK: Eğer parametre yüzünden 403 alırsak (Normal kullanıcı hatası)
-            # parametreyi silip isteği tekrar atıyoruz.
+
+            # 🛡️ CRITICAL FALLBACK: If we get 403 due to parameter (Normal user error)
+            # delete parameter and retry.
             if response.status_code == 403 and params:
-                print("⚠️ Parametre 403 verdi (Normal Kullanıcı), parametresiz deneniyor...")
+                print("⚠️ Parameter gave 403 (Normal User), retrying without parameter...")
                 response = await self._make_request("GET", url, headers=self._get_headers(token))
 
             print(f"📡 API STATUS: {response.status_code}")
@@ -63,13 +63,13 @@ class BackendAdapter:
                 return response.json()
             return []
         except Exception as e:
-            print(f"❌ Metadata Hatası: {e}")
+            print(f"❌ Metadata Error: {e}")
             return []
 
     async def get_live_values(self, token, target_company=None):
         url = f"{self.base_url}/api/v1/sensors/latest" 
         params = {}
-        
+
         is_root = str(target_company).strip() == "AirSense Root Company"
         has_selection = target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]
 
@@ -78,8 +78,8 @@ class BackendAdapter:
 
         try:
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
-            
-            # 🛡️ Aynı Fallback burada da var
+
+            # 🛡️ Same fallback here
             if response.status_code == 403 and params:
                 response = await self._make_request("GET", url, headers=self._get_headers(token))
 
@@ -92,7 +92,7 @@ class BackendAdapter:
     async def get_thresholds(self, token, target_company=None, scenario=None):
         url = f"{self.base_url}/api/v1/thresholds"
         params = {}
-        
+
         is_root = str(target_company).strip() == "AirSense Root Company"
         has_selection = target_company and str(target_company).strip() not in ["None", "null", "undefined", ""]
 
@@ -101,8 +101,8 @@ class BackendAdapter:
 
         try:
             response = await self._make_request("GET", url, headers=self._get_headers(token), params=params)
-            
-            # 🛡️ Thresholds için de 403 koruması
+
+            # 🛡️ 403 protection for Thresholds as well
             if response.status_code == 403 and params:
                 response = await self._make_request("GET", url, headers=self._get_headers(token))
 
@@ -113,36 +113,36 @@ class BackendAdapter:
             return []
 
     async def get_companies(self, token=None):
-        """Sağ üstteki menü için tüm şirket listesini çeker."""
+        """Fetches the full company list for the top-right menu."""
         url = f"{self.base_url}/companies/"
-        
+
         try:
-            print(f"🏢 Şirket listesi isteniyor: {url}")
-            # 🔑 Token ekledik ki SuperAdmin listeyi görebilsin
+            print(f"🏢 Requesting company list: {url}")
+            # 🔑 Added token so SuperAdmin can see the list
             response = await self._make_request("GET", url, headers=self._get_headers(token))
-            
+
             if response.status_code == 200:
                 data = response.json()
-                # Liste formatını kontrol edip dönüyoruz
+                # Check list format and return
                 return data if isinstance(data, list) else data.get("companies", [])
-            
-            print(f"⚠️ Şirketler gelmedi, Status: {response.status_code}")
+
+            print(f"⚠️ Companies not received, Status: {response.status_code}")
             return []
         except Exception as e:
-            print(f"❌ Şirket Listesi Alınamadı: {e}")
+            print(f"❌ Company List Could Not Be Received: {e}")
             return []
 
     async def update_sensor_location(self, token, sensor_id, new_location):
-        """Sensörün haritadaki yerini (X, Y, Z) günceller."""
+        """Updates the sensor's position (X, Y, Z) on the map."""
         url = f"{self.base_url}/api/v1/sensors/{sensor_id}"
         payload = {"location": new_location}
         try:
             response = await self._make_request("PUT", url, headers=self._get_headers(token), json_data=payload)
             return response.status_code in [200, 204]
         except Exception as e:
-            print(f"❌ Lokasyon güncellenemedi: {e}")
+            print(f"❌ Location could not be updated: {e}")
             return False
 
     async def close(self):
-        """Bağlantıları kapatır (Gerekirse)."""
+        """Closes connections (If necessary)."""
         pass
