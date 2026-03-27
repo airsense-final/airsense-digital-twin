@@ -13,7 +13,7 @@ export const useSimulation = (realSensors: any[]) => {
     z: number;
   } | null>(null);
 
-  // --- PROFESYONEL FİZİK MOTORU ---
+  // --- PROFESSIONAL PHYSICS ENGINE ---
   useEffect(() => {
     if (!isSimulating) return;
 
@@ -92,17 +92,16 @@ export const useSimulation = (realSensors: any[]) => {
             if (isCO) change += (Math.random() * 30 + 10) * gasMult;
             if (isAir) change += (Math.random() * 20 + 5) * smokeMult;
           } else if (simMode === "GAS_LEAK") {
-            // Mevcut Metan ve Alkol artışları
+            // Methane and Alcohol increases
             if (isMethane) change += (Math.random() * 500 + 100) * gasMult;
             if (isAlcohol) change += (Math.random() * 50 + 10) * gasMult;
             if (isAir) change += (Math.random() * 5 + 1) * smokeMult;
             if (isTemp) change -= Math.random() * 0.5 * heatMult;
 
-            // --- YENİ: CO2 ETKİSİ ---
-            // Gaz sızıntısı ortamdaki hava kalitesini bozduğu için CO2 sensörleri de
-            // (özellikle endüstriyel tip değilse) yukarı yönlü sapma yapar.
+            // --- NEW: CO2 EFFECT ---
+            // Gas leak affects air quality, so CO2 sensors shift upwards
             if (isCO2) {
-              change += (Math.random() * 150 + 50) * gasMult; // CO2 değerini 50-200 ppm arası artırır
+              change += (Math.random() * 150 + 50) * gasMult; // Add 50-200 ppm to CO2
             }
           }
           if (simMode === "NORMAL") {
@@ -219,7 +218,7 @@ export const useSimulation = (realSensors: any[]) => {
       };
       setSimSensors((prev) => [...prev, newNode]);
     }, []),
-    // EKSİK OLAN FONKSİYON EKLENDİ
+    // ADDED MISSING FUNCTION
     removeVirtualSensor: useCallback((id: string) => {
       setSimSensors((prev) => prev.filter((s) => s.id !== id));
     }, []),

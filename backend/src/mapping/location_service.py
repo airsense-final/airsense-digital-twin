@@ -7,22 +7,22 @@ class LocationService:
     def __init__(self):
         self.layout_data = {}
         
-        # Backend kök dizinini bul (backend <- src <- mapping <- location_service.py)
+        # Find backend root directory (backend <- src <- mapping <- location_service.py)
         self.backend_dir = Path(__file__).resolve().parent.parent.parent
         self._load_maps_into_memory()
 
     def _load_maps_into_memory(self):
         try:
-            # default.json dosyasının yolu
+            # path of default.json
             layout_path = self.backend_dir / "models" / "sensor-layouts" / "default.json"
 
             if layout_path.exists():
                 with open(layout_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.layout_data = data.get("mounting_points", {})
-                logger.info("🗺️ Harita RAM'e yüklendi.")
+                logger.info("🗺️ Map loaded into RAM.")
         except Exception as e:
-            logger.error(f"❌ Harita yüklenirken hata: {e}")
+            logger.error(f"❌ Error loading map: {e}")
 
     def estimate_anomaly_location(self, active_alerts: List[Dict]) -> Optional[Dict]:
         if not active_alerts:

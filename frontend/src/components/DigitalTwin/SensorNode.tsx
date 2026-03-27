@@ -6,7 +6,7 @@ const formatValue = (val: any) => {
     return val;
 };
 
-// --- TİTREMEYİ VE SIÇRAMAYI ÖNLEYEN SAAT MOTORU ---
+// --- CLOCK ENGINE PREVENTING JITTER AND JUMPING ---
 const LiveTimestamp = ({ utcString }: { utcString: string }) => {
     const [displayTime, setDisplayTime] = useState("--:--:--");
     const timeRef = useRef<Date | null>(null);
@@ -39,11 +39,11 @@ const LiveTimestamp = ({ utcString }: { utcString: string }) => {
     return <>{displayTime}</>;
 };
 
-// React.memo ile sarmaladık: Sadece verisi gerçekten değişen sensör render olur.
+// Wrapped with React.memo: Only sensors whose data actually changes will re-render.
 export const SensorNode = memo(({ data, availableSlots, onUpdateLocation, onSimulateValue, isEditMode, isSimulationMode, indexOffset }: any) => {
   const [showPopup, setShowPopup] = useState(false);
 
-  // Durum rengi hesaplamaları
+  // Status color calculations
   let statusColor = "#16a34a"; 
   if (data.value > 30) statusColor = "#facc15"; 
   if (data.value > 70) statusColor = "#dc2626"; 
@@ -56,7 +56,7 @@ export const SensorNode = memo(({ data, availableSlots, onUpdateLocation, onSimu
   return (
     <group position={[data.position.x, adjustedY, data.position.z]}>
       
-      {/* 1. SENSÖR ANA GÖVDESİ */}
+      {/* 1. SENSOR MAIN BODY */}
       <group onClick={() => setShowPopup(!showPopup)}>
         <mesh castShadow>
           <boxGeometry args={[1.2, 0.7, 1.2]} />
@@ -87,7 +87,7 @@ export const SensorNode = memo(({ data, availableSlots, onUpdateLocation, onSimu
         </mesh>
       </group>
 
-      {/* 2. MONTAJ APARATI VE DİREK */}
+      {/* 2. MOUNTING APPARATUS AND POLE */}
       <mesh position={[0, -0.45, 0]}>
         <cylinderGeometry args={[0.2, 0.3, 0.2, 16]} />
         <meshStandardMaterial color="#475569" metalness={0.8} />
@@ -130,13 +130,13 @@ export const SensorNode = memo(({ data, availableSlots, onUpdateLocation, onSimu
             
             {isSimulationMode ? (
                 <div style={{margin:'8px 0'}}>
-                    {/* DÜZELTME 1: Simülasyon modunda da değişen veriyi kocaman gösteriyoruz */}
+                    {/* CORRECTION 1: Showing changing data in simulation mode as well */}
                     <div style={{fontSize:'28px', fontWeight:'800', margin:'4px 0', color:'#a855f7'}}>
                         {formatValue(data.value)}
                     </div>
                     
                     <label style={{fontSize:'10px', display:'block', color:'#a855f7', fontWeight:'bold'}}>SET SIM VALUE:</label>
-                    {/* DÜZELTME 2: defaultValue yerine value kullandık. Artık hep güncel! */}
+                    {/* CORRECTION 2: Used value instead of defaultValue. Always up to date! */}
                     <input 
                         type="number" 
                         value={formatValue(data.value)} 

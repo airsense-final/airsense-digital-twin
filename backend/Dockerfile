@@ -23,10 +23,10 @@ ENV PYTHONUNBUFFERED=1
 # Builder katmanından paketleri kopyala
 COPY --from=builder /install /usr/local
 
-# Tüm kodları kopyala
+# Copy all codes
 COPY . .
 
-# Log dizini oluştur
+# Create logs directory
 RUN mkdir -p logs && chmod 777 logs
 
 EXPOSE 10002

@@ -2,7 +2,7 @@ import { FactoryScene } from './components/DigitalTwin/FactoryScene';
 
 function App() {
   return (
-    // Arka planı siyah yapıp tam ekran kaplıyoruz
+    // Black background and full screen
     <div style={{ 
       width: '100vw', 
       minHeight: '100vh', 
@@ -10,7 +10,7 @@ function App() {
       padding: '20px', 
       boxSizing: 'border-box' 
     }}>
-      {/* Yazdığımız Dijital İkiz Bileşenini Çağırıyoruz */}
+      {/* Import Digital Twin Component */}
       <FactoryScene />
     </div>
   );

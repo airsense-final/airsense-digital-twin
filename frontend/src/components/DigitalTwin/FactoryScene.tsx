@@ -59,7 +59,7 @@ export const FactoryScene = () => {
   });
 
   const [agentCount, setAgentCount] = useState<number>(5);
-  const [resetTrigger, setResetTrigger] = useState<number>(0); // YENİ: Reset state'i
+  const [resetTrigger, setResetTrigger] = useState<number>(0); // NEW: Reset state
   const [showReport, setShowReport] = useState(false);
   const [finalReport, setFinalReport] = useState<any>(null);
 
@@ -190,7 +190,7 @@ export const FactoryScene = () => {
   if (role === "superadmin") {
     axios.get(`${API_URL}/api/companies`).then((res) => {
       setCompanies(res.data);
-      // Eğer URL'den bir şirket gelmişse onu koru, gelmemişse ilk şirketi seç
+      // If a company name came from URL, keep it, otherwise select the first company
       if (userCompany) {
         setSelectedCompany(userCompany);
       } else if (res.data.length > 0) {
@@ -198,10 +198,10 @@ export const FactoryScene = () => {
       }
     });
   } else if (userCompany) {
-    // Normal kullanıcı veya şirket admini ise direkt URL'deki şirketi al
+    // If normal user or company admin, directly take the company from URL
     setSelectedCompany(userCompany);
   }
-}, [role, userCompany]); // userCompany bağımlılığını eklediğinden emin ol
+}, [role, userCompany]); // Ensure userCompany dependency is added
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -279,7 +279,7 @@ export const FactoryScene = () => {
             });
           }
         } catch (e) {
-          console.error("Parse hatası:", e);
+          console.error("Parse error:", e);
         }
       };
 
@@ -289,9 +289,9 @@ export const FactoryScene = () => {
     }
   }, [selectedCompany, token, role, scenario]);
 
-  // --- ANOMALİ HESAPLAMA MOTORU ---
+  // --- ANOMALY CALCULATION ENGINE ---
   useEffect(() => {
-    // Sadece durumu 'critical' olan sensörleri bul
+    // Find only sensors with 'critical' status
     const activeSensors = displaySensors
       .map((s) => {
         const criticalLimit = s.thresholds?.critical || 9999;
@@ -344,7 +344,7 @@ export const FactoryScene = () => {
         });
       }
     } catch (e) {
-      console.error("Güncelleme hatası:", e);
+      console.error("Update error:", e);
     }
   };
 
@@ -461,7 +461,7 @@ export const FactoryScene = () => {
             />
             <button
               onClick={() => setResetTrigger((prev) => prev + 1)}
-              title="İşçileri Resetle"
+              title="Reset Workers"
               style={{
                 background: "#3b82f6",
                 color: "white",
@@ -546,7 +546,7 @@ export const FactoryScene = () => {
       </div>
 
       <div style={{ flex: 1, position: "relative" }}>
-        {/* OLAY YERİ RAPORU MODALI */}
+        {/* INCIDENT REPORT MODAL */}
         {showReport && finalReport && (
           <div
             style={{
@@ -669,14 +669,14 @@ export const FactoryScene = () => {
           </div>
         )}
 
-        {/* --- GÖRÜNÜR HALE GETİRİLEN TAHLİYE İSTATİSTİKLERİ UI --- */}
+        {/* --- VISIBLE EVACUATION STATISTICS UI --- */}
         {isSimulating && simMode !== "NORMAL" && (
           <div
             style={{
               position: "absolute",
               top: "160px",
               right: "20px",
-              zIndex: 200, // Z-index artırıldı, biraz daha aşağı alındı
+              zIndex: 200, // Z-index increased, moved slightly down
               background: "rgba(15, 23, 42, 0.95)",
               padding: "18px",
               borderRadius: "8px",
@@ -696,7 +696,7 @@ export const FactoryScene = () => {
                 fontSize: "16px",
               }}
             >
-              🏃‍♂️ EVACUATİON STATUS
+              🏃‍♂️ EVACUATION STATUS
             </h4>
             <div
               style={{
@@ -908,7 +908,7 @@ export const FactoryScene = () => {
             hazardPosition={simCenter}
             onStatsUpdate={setCrowdStats}
             agentCount={agentCount}
-            resetTrigger={resetTrigger} // YENİ: Prop geçirildi
+            resetTrigger={resetTrigger} // NEW: Prop passed
           />
 
           {isSimulating && simCenter && simMode === "FIRE" && (

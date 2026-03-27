@@ -28,12 +28,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 2. KRİTİK: CHROME "LOOPBACK" ENGELİNİ KIRAN MIDDLEWARE ---
+# --- 2. CRITICAL: MIDDLEWARE BREAKING CHROME "LOOPBACK" RESTRICTION ---
 @app.middleware("http")
 async def add_private_network_access_header(request: Request, call_next):
+    origin = request.headers.get("origin")
+    allowed_origins = [
+        "https://airsensedigitaltwin.netlify.app",
+        "http://localhost:5173",
+        "http://localhost:3000"
+    ]
+    
+    selected_origin = origin if origin in allowed_origins else "https://airsensedigitaltwin.netlify.app"
+
     if request.method == "OPTIONS":
         response = Response()
-        response.headers["Access-Control-Allow-Origin"] = "https://airsensedigitaltwin.netlify.app"
+        response.headers["Access-Control-Allow-Origin"] = selected_origin
         response.headers["Access-Control-Allow-Methods"] = "*"
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Allow-Private-Network"] = "true"
@@ -41,20 +50,20 @@ async def add_private_network_access_header(request: Request, call_next):
     
     response = await call_next(request)
     response.headers["Access-Control-Allow-Private-Network"] = "true"
-    response.headers["Access-Control-Allow-Origin"] = "https://airsensedigitaltwin.netlify.app"
+    response.headers["Access-Control-Allow-Origin"] = selected_origin
     return response
 
 
 
 def load_mappings_from_db():
     mappings = {}
-    # Tüm kayıtları bul ve sözlük (dictionary) formatına çevir
+    # Find all records and convert to dictionary format
     for doc in mappings_collection.find():
         mappings[doc["sensor_id"]] = doc["location_key"]
     return mappings
 
 def save_mapping_to_db(sensor_id, location_key):
-    # upsert=True sayesinde kayıt varsa günceller, yoksa yeni kayıt oluşturur
+    # upsert=True updates if record exists, creates new if not
     mappings_collection.update_one(
         {"sensor_id": sensor_id},
         {"$set": {"location_key": location_key}},
@@ -215,7 +224,7 @@ def get_room_config():
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), company: str = Query(None)):
     target_comp = None if (company == "None" or not company) else company
     await manager.connect(websocket)
-    print(f"🔌 WebSocket Bağlantısı Kuruldu. Şirket: {target_comp}")
+    print(f"🔌 WebSocket Connection Established. Company: {target_comp}")
     
     try:
         while True:
@@ -227,15 +236,15 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), comp
                         "data": live_data
                     })
             except Exception as inner_e:
-                print(f"⚠️ İletişim koptu: {inner_e}")
+                print(f"⚠️ Communication lost: {inner_e}")
                 break 
 
             await asyncio.sleep(1) 
 
     except WebSocketDisconnect:
-        print("❌ İstemci tarayıcıyı kapattı.")
+        print("❌ Client closed the browser.")
     except Exception as e:
-        print(f"⚠️ Beklenmedik WS Hatası: {e}")
+        print(f"⚠️ Unexpected WS Error: {e}")
     finally:
         manager.disconnect(websocket)
 

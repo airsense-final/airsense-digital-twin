@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
-// --- RENK SKALASI OLUŞTURUCU ---
+// --- COLOR SCALE GENERATOR ---
 const getColorForValue = (value: number, min: number, max: number) => {
   let t = (value - min) / (max - min);
   t = Math.max(0, Math.min(1, t)); 
@@ -12,7 +12,7 @@ const getColorForValue = (value: number, min: number, max: number) => {
 interface HeatmapProps {
   sensors: any[];
   visible: boolean;
-  mode: 'TEMP' | 'HUMIDITY' | 'GAS' | 'GENERAL'; // 'GENERAL' modu eklendi
+  mode: 'TEMP' | 'HUMIDITY' | 'GAS' | 'GENERAL'; // 'GENERAL' mode added
   minRange: number;
   maxRange: number;
 }
@@ -34,11 +34,11 @@ export const HeatmapLayer = ({ sensors, visible, mode, minRange, maxRange }: Hea
 
     ctx.clearRect(0, 0, RESOLUTION, RESOLUTION);
 
-    // --- 1. SENSÖR FİLTRELEME ---
+    // --- 1. SENSOR FILTERING ---
     const activeSensors = sensors.filter(s => {
         const type = (s.sensor_type || s.type || "").toLowerCase();
         
-        if (mode === 'GENERAL') return true; // Genel modda HEPSİNİ al
+        if (mode === 'GENERAL') return true; // Take ALL in General mode
         if (mode === 'TEMP') return type.includes('temp');
         if (mode === 'HUMIDITY') return type.includes('hum');
         if (mode === 'GAS') return !type.includes('temp') && !type.includes('hum');
@@ -47,7 +47,7 @@ export const HeatmapLayer = ({ sensors, visible, mode, minRange, maxRange }: Hea
 
     if (activeSensors.length === 0) return;
 
-    // --- 2. IDW ALGORİTMASI ---
+    // --- 2. IDW ALGORITHM ---
     for (let y = 0; y < RESOLUTION; y++) {
       for (let x = 0; x < RESOLUTION; x++) {
         const worldX = (x / RESOLUTION) * FLOOR_SIZE - (FLOOR_SIZE / 2);
@@ -60,23 +60,23 @@ export const HeatmapLayer = ({ sensors, visible, mode, minRange, maxRange }: Hea
         for (const s of activeSensors) {
           const dist = Math.sqrt(Math.pow(worldX - s.position.x, 2) + Math.pow(worldZ - s.position.z, 2));
 
-          // --- DEĞER NORMALİZASYONU (KRİTİK KISIM) ---
+          // --- VALUE NORMALIZATION (CRITICAL PART) ---
           let sensorValue = s.value || 0;
 
-          // DÜZELTME BURADA: Sadece GENERAL değil, GAS modunda da yüzdeye çeviriyoruz.
-          // Çünkü farklı gazların (CO vs Metan) eşikleri farklıdır.
+          // CORRECTION HERE: Convert to percentage in GAS mode as well, not just GENERAL.
+          // Because different gases (CO vs Methane) have different thresholds.
           if (mode === 'GENERAL' || mode === 'GAS') {
-             // Sensörün kendi kritik limiti (Backend'den gelen) yoksa varsayılan bir değer kullan
+             // If sensor doesn't have its own critical limit (from Backend), use a default
              const type = (s.sensor_type || "").toLowerCase();
-             let limit = 1000; // Gazlar için varsayılan
+             let limit = 1000; // Default for gases
 
              if (type.includes('temp')) limit = 80;
              else if (type.includes('hum')) limit = 100;
              
-             // Sensörde özel threshold varsa onu kullan (Backend verisi)
+             // Use specific threshold if available (Backend data)
              if (s.thresholds?.critical) limit = s.thresholds.critical;
 
-             // Yüzdeye çevir (0 - 100 arası)
+             // Convert to percentage (0 - 100)
              sensorValue = (sensorValue / limit) * 100;
              if (sensorValue > 100) sensorValue = 100; 
           }
