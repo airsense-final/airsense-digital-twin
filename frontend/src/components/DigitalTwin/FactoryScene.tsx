@@ -6,7 +6,7 @@ import axios from "axios";
 import { FactoryArchitecture } from "./FactoryArchitecture";
 import { HeatmapLayer } from "./HeatmapLayer";
 import { SensorNode } from "./SensorNode";
-import layoutConfig from "../../../../backend/models/sensor-layouts/default.json";
+import layoutConfig from "../../data/layoutConfig.json";
 import { useSimulation } from "../../hooks/useSimulation";
 import { SimulationPanel } from "./SimulationPanel";
 
@@ -15,9 +15,9 @@ import { FireEffect, GasLeakEffect, SirenStrobe } from "./SceneEffects";
 import { KeyboardMapMover } from "./SceneControls";
 import { CrowdSimulation } from "./CrowdSimulation";
 
-const API_URL =
-  (import.meta as any).env?.VITE_API_URL || "https://twin.airsenseapi.com";
-const WS_URL = (import.meta as any).env?.VITE_WS_URL || "wss://twin.airsenseapi.com";
+// FORCE PRODUCTION URLS TO PREVENT MIXED CONTENT
+const API_URL = "https://twin.airsenseapi.com";
+const WS_URL = "wss://twin.airsenseapi.com";
 
 const SENSOR_TYPE_MAP: Record<string, string> = {
   Temperature: "dht11_temp",
@@ -59,7 +59,7 @@ export const FactoryScene = () => {
   });
 
   const [agentCount, setAgentCount] = useState<number>(5);
-  const [resetTrigger, setResetTrigger] = useState<number>(0); // NEW: Reset state
+  const [resetTrigger, setResetTrigger] = useState<number>(0); 
   const [showReport, setShowReport] = useState(false);
   const [finalReport, setFinalReport] = useState<any>(null);
 
@@ -83,12 +83,7 @@ export const FactoryScene = () => {
       GENERAL: { min: 0, max: 100, warning: 75, unit: "Risk %" },
     };
 
-    if (thresholds.length > 0) {
-      let maxTemp = 0,
-        warnTemp = 0;
-      let maxHum = 0,
-        warnHum = 0;
-
+    if (thresholds && thresholds.length > 0) {
       thresholds.forEach((t) => {
         const type = t.sensor_type?.toLowerCase() || "";
         const crit = t.critical_max;
@@ -97,30 +92,22 @@ export const FactoryScene = () => {
         if (crit) {
           if (type.includes("temp")) {
             if (crit < 200) {
-              maxTemp = Math.max(maxTemp, crit);
-              if (warn) warnTemp = Math.max(warnTemp, warn);
+              config.TEMP.max = Math.max(config.TEMP.max, crit);
+              if (warn) config.TEMP.warning = Math.max(config.TEMP.warning, warn);
             }
           } else if (type.includes("hum")) {
-            maxHum = Math.max(maxHum, crit);
-            if (warn) warnHum = Math.max(warnHum, warn);
+            config.HUMIDITY.max = Math.max(config.HUMIDITY.max, crit);
+            if (warn) config.HUMIDITY.warning = Math.max(config.HUMIDITY.warning, warn);
           }
         }
       });
-
-      if (maxTemp > 0) {
-        config.TEMP.max = maxTemp;
-        if (warnTemp > 0) config.TEMP.warning = warnTemp;
-      }
-      if (maxHum > 0) {
-        config.HUMIDITY.max = maxHum;
-        if (warnHum > 0) config.HUMIDITY.warning = warnHum;
-      }
     }
     return config;
   }, [thresholds]);
 
   const enrichSensorsWithThresholds = useCallback(
     (rawSensors: any[], thresholdList: any[]) => {
+      if (!rawSensors) return [];
       return rawSensors.map((sensor) => {
         const mappedType =
           SENSOR_TYPE_MAP[sensor.sensor_type] ||
@@ -128,7 +115,7 @@ export const FactoryScene = () => {
           "";
         const scenario = sensor.scenario || "indoor_small";
 
-        const matchingThreshold = thresholdList.find(
+        const matchingThreshold = thresholdList?.find(
           (t) =>
             t.sensor_type === mappedType &&
             t.scenario === scenario &&
@@ -187,21 +174,19 @@ export const FactoryScene = () => {
     );
 
   useEffect(() => {
-  if (role === "superadmin") {
-    axios.get(`${API_URL}/api/companies`).then((res) => {
-      setCompanies(res.data);
-      // If a company name came from URL, keep it, otherwise select the first company
-      if (userCompany) {
-        setSelectedCompany(userCompany);
-      } else if (res.data.length > 0) {
-        setSelectedCompany(res.data[0].name);
-      }
-    });
-  } else if (userCompany) {
-    // If normal user or company admin, directly take the company from URL
-    setSelectedCompany(userCompany);
-  }
-}, [role, userCompany]); // Ensure userCompany dependency is added
+    if (role === "superadmin") {
+      axios.get(`${API_URL}/api/companies`).then((res) => {
+        setCompanies(res.data);
+        if (userCompany) {
+          setSelectedCompany(userCompany);
+        } else if (res.data.length > 0) {
+          setSelectedCompany(res.data[0].name);
+        }
+      }).catch(err => console.error("Company fetch failed", err));
+    } else if (userCompany) {
+      setSelectedCompany(userCompany);
+    }
+  }, [role, userCompany]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -237,7 +222,8 @@ export const FactoryScene = () => {
         .get(`${API_URL}/api/layout-slots`, {
           params: { company: selectedCompany },
         })
-        .then((res) => setAvailableSlots(res.data));
+        .then((res) => setAvailableSlots(res.data))
+        .catch(e => console.error("Slots fetch error", e));
     }
 
     let ws: WebSocket | null = null;
@@ -247,41 +233,45 @@ export const FactoryScene = () => {
         : "";
       const wsUrl = `${WS_URL}/ws?token=${encodeURIComponent(token)}${companyParam}`;
 
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.type === "SENSOR_UPDATE" && Array.isArray(message.data)) {
-            setSensors((prevSensors) => {
-              return prevSensors.map((sensor) => {
-                const match = message.data.find((u: any) => {
-                  const incomingId =
-                    u.metadata?.sensor_id || u.sensor_id || u._id;
-                  return String(incomingId) === String(sensor.id);
-                });
+      try {
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === "SENSOR_UPDATE" && Array.isArray(message.data)) {
+              setSensors((prevSensors) => {
+                return prevSensors.map((sensor) => {
+                  const match = message.data.find((u: any) => {
+                    const incomingId =
+                      u.metadata?.sensor_id || u.sensor_id || u._id;
+                    return String(incomingId) === String(sensor.id);
+                  });
 
-                if (match) {
-                  const newVal =
-                    match.value ?? match.latest_value ?? match.current_value;
-                  if (
-                    newVal !== sensor.value ||
-                    match.timestamp !== sensor.timestamp
-                  ) {
-                    return {
-                      ...sensor,
-                      value: newVal,
-                      timestamp: match.timestamp,
-                    };
+                  if (match) {
+                    const newVal =
+                      match.value ?? match.latest_value ?? match.current_value;
+                    if (
+                      newVal !== sensor.value ||
+                      match.timestamp !== sensor.timestamp
+                    ) {
+                      return {
+                        ...sensor,
+                        value: newVal,
+                        timestamp: match.timestamp,
+                      };
+                    }
                   }
-                }
-                return sensor;
+                  return sensor;
+                });
               });
-            });
+            }
+          } catch (e) {
+            console.error("Parse error:", e);
           }
-        } catch (e) {
-          console.error("Parse error:", e);
-        }
-      };
+        };
+      } catch (e) {
+        console.error("WebSocket init error", e);
+      }
 
       return () => {
         if (ws && ws.readyState === WebSocket.OPEN) ws.close();
@@ -289,9 +279,7 @@ export const FactoryScene = () => {
     }
   }, [selectedCompany, token, role, scenario]);
 
-  // --- ANOMALY CALCULATION ENGINE ---
   useEffect(() => {
-    // Find only sensors with 'critical' status
     const activeSensors = displaySensors
       .map((s) => {
         const criticalLimit = s.thresholds?.critical || 9999;
@@ -307,7 +295,7 @@ export const FactoryScene = () => {
           if (res.data.status === "success") {
             setEstimatedAnomalyPos(res.data.data);
           }
-        });
+        }).catch(e => console.error("Anomaly calc error", e));
     } else {
       setEstimatedAnomalyPos(null);
     }
@@ -420,7 +408,6 @@ export const FactoryScene = () => {
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <DigitalClock />
 
-          {/* NUMBER OF WORKERS AND RESET BUTTON */}
           <div
             style={{
               display: "flex",
@@ -490,7 +477,7 @@ export const FactoryScene = () => {
               fontWeight: "bold",
             }}
           >
-            {isSimulating ? "🛑 STOP SIMULATION" : "🧪 SIMULATION"}
+            {isSimulating ? "🛑 STOP" : "🧪 SIMULATION"}
           </button>
           <button
             onClick={() => setShowHeatmap(!showHeatmap)}
@@ -546,7 +533,6 @@ export const FactoryScene = () => {
       </div>
 
       <div style={{ flex: 1, position: "relative" }}>
-        {/* INCIDENT REPORT MODAL */}
         {showReport && finalReport && (
           <div
             style={{
@@ -565,398 +551,61 @@ export const FactoryScene = () => {
               boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.8)",
             }}
           >
-            <h2
-              style={{
-                margin: "0 0 15px 0",
-                color: "#3b82f6",
-                borderBottom: "1px solid #334155",
-                paddingBottom: "10px",
-              }}
-            >
-              📋 Incident Report
-            </h2>
-            <p style={{ margin: "0 0 20px 0", color: "#94a3b8" }}>
-              Simulation Type: <b>{finalReport.mode}</b>
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "10px",
-                fontSize: "16px",
-              }}
-            >
-              <span>Total Workers:</span> <b>{agentCount}</b>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "10px",
-                fontSize: "16px",
-              }}
-            >
-              <span>✅ Safe (Evacuated):</span>{" "}
-              <b style={{ color: "#22c55e" }}>{finalReport.stats.safe}</b>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "10px",
-                fontSize: "16px",
-              }}
-            >
-              <span>🤕 Injured:</span>{" "}
-              <b style={{ color: "#f97316" }}>{finalReport.stats.injured}</b>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "25px",
-                fontSize: "16px",
-              }}
-            >
-              <span>☠️ Casualties:</span>{" "}
-              <b style={{ color: "#ef4444" }}>{finalReport.stats.dead}</b>
-            </div>
-
-            <button
-              onClick={() => setShowReport(false)}
-              style={{
-                width: "100%",
-                padding: "10px",
-                background: "#3b82f6",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "bold",
-                fontSize: "16px",
-              }}
-            >
-              CLOSE REPORT
-            </button>
+            <h2 style={{ margin: "0 0 15px 0", color: "#3b82f6", borderBottom: "1px solid #334155", paddingBottom: "10px" }}>📋 Incident Report</h2>
+            <p style={{ margin: "0 0 20px 0", color: "#94a3b8" }}>Simulation Type: <b>{finalReport.mode}</b></p>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "16px" }}><span>Total Workers:</span> <b>{agentCount}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "16px" }}><span>✅ Safe:</span> <b style={{ color: "#22c55e" }}>{finalReport.stats.safe}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "16px" }}><span>🤕 Injured:</span> <b style={{ color: "#f97316" }}>{finalReport.stats.injured}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "25px", fontSize: "16px" }}><span>☠️ Casualties:</span> <b style={{ color: "#ef4444" }}>{finalReport.stats.dead}</b></div>
+            <button onClick={() => setShowReport(false)} style={{ width: "100%", padding: "10px", background: "#3b82f6", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "16px" }}>CLOSE REPORT</button>
           </div>
         )}
 
         {isSimulating && simMode !== "NORMAL" && (
-          <div
-            style={{
-              position: "absolute",
-              top: "15%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              zIndex: 100,
-              background: "rgba(220, 38, 38, 0.85)",
-              color: "white",
-              padding: "20px 40px",
-              borderRadius: "12px",
-              fontSize: "28px",
-              fontWeight: "bold",
-              border: "3px solid white",
-              boxShadow: "0 0 20px rgba(255,0,0,0.5)",
-              pointerEvents: "none",
-              textAlign: "center",
-            }}
-          >
+          <div style={{ position: "absolute", top: "15%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 100, background: "rgba(220, 38, 38, 0.85)", color: "white", padding: "20px 40px", borderRadius: "12px", fontSize: "28px", fontWeight: "bold", border: "3px solid white", boxShadow: "0 0 20px rgba(255,0,0,0.5)", pointerEvents: "none", textAlign: "center" }}>
             🚨 EMERGENCY: {simMode} DETECTED! 🚨
-            <div style={{ fontSize: "14px", marginTop: "5px" }}>
-              Immediate Action Required In Affected Zones
-            </div>
+            <div style={{ fontSize: "14px", marginTop: "5px" }}>Immediate Action Required</div>
           </div>
         )}
 
-        {/* --- VISIBLE EVACUATION STATISTICS UI --- */}
+        {/* Evacuation Stats */}
         {isSimulating && simMode !== "NORMAL" && (
-          <div
-            style={{
-              position: "absolute",
-              top: "160px",
-              right: "20px",
-              zIndex: 200, // Z-index increased, moved slightly down
-              background: "rgba(15, 23, 42, 0.95)",
-              padding: "18px",
-              borderRadius: "8px",
-              border: "2px solid #3b82f6",
-              width: "240px",
-              color: "white",
-              fontFamily: "sans-serif",
-              boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)",
-            }}
-          >
-            <h4
-              style={{
-                margin: "0 0 10px 0",
-                borderBottom: "1px solid #475569",
-                paddingBottom: "5px",
-                color: "#38bdf8",
-                fontSize: "16px",
-              }}
-            >
-              🏃‍♂️ EVACUATION STATUS
-            </h4>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "8px",
-                fontSize: "14px",
-              }}
-            >
-              <span>🏃 Evacuating:</span>{" "}
-              <b style={{ color: "#eab308" }}>{crowdStats.alive}</b>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "8px",
-                fontSize: "14px",
-              }}
-            >
-              <span>✅ Safe:</span>{" "}
-              <b style={{ color: "#22c55e" }}>{crowdStats.safe}</b>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "8px",
-                fontSize: "14px",
-              }}
-            >
-              <span>🤕 Injured:</span>{" "}
-              <b style={{ color: "#f97316" }}>{crowdStats.injured}</b>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: "14px",
-              }}
-            >
-              <span>☠️ Casualties:</span>{" "}
-              <b style={{ color: "#ef4444" }}>{crowdStats.dead}</b>
-            </div>
+          <div style={{ position: "absolute", top: "160px", right: "20px", zIndex: 200, background: "rgba(15, 23, 42, 0.95)", padding: "18px", borderRadius: "8px", border: "2px solid #3b82f6", width: "240px", color: "white", fontFamily: "sans-serif" }}>
+            <h4 style={{ margin: "0 0 10px 0", borderBottom: "1px solid #475569", paddingBottom: "5px", color: "#38bdf8" }}>🏃‍♂️ EVACUATION STATUS</h4>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}><span>🏃 Evacuating:</span> <b style={{ color: "#eab308" }}>{crowdStats.alive}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}><span>✅ Safe:</span> <b style={{ color: "#22c55e" }}>{crowdStats.safe}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px" }}><span>🤕 Injured:</span> <b style={{ color: "#f97316" }}>{crowdStats.injured}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}><span>☠️ Casualties:</span> <b style={{ color: "#ef4444" }}>{crowdStats.dead}</b></div>
           </div>
         )}
 
-        {displaySensors.some((s) => s.status === "critical") && (
-          <div
-            style={{
-              position: "absolute",
-              right: "20px",
-              top: "100px",
-              zIndex: 100,
-              background: "rgba(15, 23, 42, 0.9)",
-              padding: "15px",
-              borderRadius: "8px",
-              border: "2px solid #ef4444",
-              width: "220px",
-            }}
-          >
-            <h4
-              style={{
-                color: "#ef4444",
-                margin: "0 0 10px 0",
-                borderBottom: "1px solid #ef4444",
-                paddingBottom: "5px",
-              }}
-            >
-              ⚠️ CRITICAL NODES
-            </h4>
-            {displaySensors
-              .filter((s) => s.status === "critical")
-              .map((s) => (
-                <div
-                  key={s.id}
-                  style={{
-                    color: "white",
-                    fontSize: "12px",
-                    marginBottom: "8px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <span>{s.name}:</span>
-                  <b style={{ color: "#f87171" }}>{s.value?.toFixed(1)}</b>
-                </div>
-              ))}
-          </div>
-        )}
-
-        {showHeatmap && (
-          <div
-            style={{
-              position: "absolute",
-              top: "70px",
-              right: "20px",
-              zIndex: 20,
-            }}
-          >
-            <select
-              onChange={(e) => setHeatmapMode(e.target.value as any)}
-              value={heatmapMode}
-              style={{
-                padding: "8px",
-                background: "#334155",
-                color: "#38bdf8",
-                borderRadius: "6px",
-                border: "1px solid #475569",
-                fontWeight: "bold",
-                cursor: "pointer",
-              }}
-            >
-              <option value="GENERAL">🌍 General Risk Map</option>
-              <option value="TEMP">🌡️ Temperature Map</option>
-              <option value="HUMIDITY">💧 Humidity Map</option>
-              <option value="GAS">☠️ Gas/Hazard Map</option>
-            </select>
-          </div>
-        )}
-
-        {showHeatmap && (
-          <HeatmapLegend
-            min={heatmapConfig[heatmapMode].min}
-            max={heatmapConfig[heatmapMode].max}
-            warning={heatmapConfig[heatmapMode].warning}
-            unit={heatmapConfig[heatmapMode].unit}
-          />
-        )}
-
-        {isSimulating && (
-          <SimulationPanel
-            sensors={displaySensors}
-            onAdd={(type) => addVirtualSensor(type)}
-            onRemove={removeVirtualSensor}
-            onScenario={runScenario}
-          />
-        )}
-
-        <Canvas
-          shadows
-          camera={{ position: [20, 14, 30], fov: 45 }}
-          frameloop="always"
-        >
+        <Canvas shadows camera={{ position: [20, 14, 30], fov: 45 }} frameloop="always">
           <color attach="background" args={["#e5e7eb"]} />
           <fog attach="fog" args={["#e5e7eb", 40, 180]} />
-
-          <hemisphereLight
-            intensity={isSimulating && simMode !== "NORMAL" ? 0.3 : 0.8}
-            groundColor="#d1d5db"
-            color="#ffffff"
-          />
-          <directionalLight
-            position={[50, 80, 50]}
-            intensity={isSimulating && simMode !== "NORMAL" ? 0.5 : 1.5}
-            castShadow
-          />
-
+          <hemisphereLight intensity={isSimulating && simMode !== "NORMAL" ? 0.3 : 0.8} groundColor="#d1d5db" color="#ffffff" />
+          <directionalLight position={[50, 80, 50]} intensity={isSimulating && simMode !== "NORMAL" ? 0.5 : 1.5} castShadow />
           {isSimulating && simMode !== "NORMAL" && <SirenStrobe />}
-
           <pointLight position={[0, 18, 0]} intensity={0.5} />
           <KeyboardMapMover controlsRef={controlsRef} />
-          <MapControls
-            ref={controlsRef}
-            makeDefault
-            screenSpacePanning={true}
-            dampingFactor={0.1}
-            minDistance={5}
-            maxDistance={90}
-          />
-
-          {isSimulating && (simMode === "FIRE" || simMode === "GAS_LEAK") && (
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              position={[0, 0.1, 0]}
-              onDoubleClick={(e: any) => {
-                e.stopPropagation();
-                runScenario(simMode, { x: e.point.x, y: 0.5, z: e.point.z });
-              }}
-            >
-              <planeGeometry args={[500, 500]} />
-              <meshBasicMaterial visible={false} />
-            </mesh>
-          )}
-
+          <MapControls ref={controlsRef} makeDefault screenSpacePanning={true} dampingFactor={0.1} minDistance={5} maxDistance={90} />
           <FactoryArchitecture />
-
           {estimatedAnomalyPos && !isSimulating && (
             <mesh position={[estimatedAnomalyPos.x, estimatedAnomalyPos.y + 3, estimatedAnomalyPos.z]}>
               <sphereGeometry args={[2, 32, 32]} />
               <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={2} transparent opacity={0.7} />
             </mesh>
           )}
-
-          <HeatmapLayer
-            sensors={displaySensors}
-            visible={showHeatmap}
-            mode={heatmapMode as any}
-            minRange={
-              heatmapConfig[heatmapMode as keyof typeof heatmapConfig].min
-            }
-            maxRange={
-              heatmapConfig[heatmapMode as keyof typeof heatmapConfig].max
-            }
-          />
-
-          <CrowdSimulation
-            isEmergency={isSimulating && simMode !== "NORMAL"}
-            hazardPosition={simCenter}
-            onStatsUpdate={setCrowdStats}
-            agentCount={agentCount}
-            resetTrigger={resetTrigger} // NEW: Prop passed
-          />
-
-          {isSimulating && simCenter && simMode === "FIRE" && (
-            <FireEffect position={simCenter} />
-          )}
-          {isSimulating && simCenter && simMode === "GAS_LEAK" && (
-            <GasLeakEffect position={simCenter} />
-          )}
-
-          <ContactShadows
-            resolution={1024}
-            scale={150}
-            blur={3}
-            opacity={0.4}
-            far={10}
-            color="#000000"
-          />
-
+          <HeatmapLayer sensors={displaySensors} visible={showHeatmap} mode={heatmapMode as any} minRange={heatmapConfig[heatmapMode].min} maxRange={heatmapConfig[heatmapMode].max} />
+          <CrowdSimulation isEmergency={isSimulating && simMode !== "NORMAL"} hazardPosition={simCenter} onStatsUpdate={setCrowdStats} agentCount={agentCount} resetTrigger={resetTrigger} />
+          {isSimulating && simCenter && simMode === "FIRE" && (<FireEffect position={simCenter} />)}
+          {isSimulating && simCenter && simMode === "GAS_LEAK" && (<GasLeakEffect position={simCenter} />)}
+          <ContactShadows resolution={1024} scale={150} blur={3} opacity={0.4} far={10} color="#000000" />
           {displaySensors.map((s) => (
-            <SensorNode
-              key={s.id}
-              data={s}
-              availableSlots={availableSlots}
-              onUpdateLocation={handleUpdateLocation}
-              onSimulateValue={handleSimulateValue}
-              isEditMode={isEditMode}
-              isSimulationMode={isSimulating}
-              indexOffset={getOffset(s.location_name)}
-            />
+            <SensorNode key={s.id} data={s} availableSlots={availableSlots} onUpdateLocation={handleUpdateLocation} onSimulateValue={handleSimulateValue} isEditMode={isEditMode} isSimulationMode={isSimulating} indexOffset={getOffset(s.location_name)} />
           ))}
         </Canvas>
-        <div
-          style={{
-            position: "absolute",
-            bottom: "30px",
-            left: "30px",
-            background: "rgba(15, 23, 42, 0.8)",
-            color: "#e5e7eb",
-            padding: "15px",
-            borderRadius: "8px",
-            fontSize: "12px",
-            border: "1px solid #334155",
-          }}
-        >
-          🎮 <b>Controls:</b>
-          <br />• Left Click: Pan | Right Click: Rotate
-          <br />• Double Click: Move Fire/Gas Leak (In Simulation)
-          <br />• WASD: Move | Shift: Fast
+        <div style={{ position: "absolute", bottom: "30px", left: "30px", background: "rgba(15, 23, 42, 0.8)", color: "#e5e7eb", padding: "15px", borderRadius: "8px", fontSize: "12px", border: "1px solid #334155" }}>
+          🎮 <b>Controls:</b><br />• Left Click: Pan | Right Click: Rotate<br />• WASD: Move | Shift: Fast
         </div>
       </div>
     </div>
