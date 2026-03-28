@@ -214,8 +214,12 @@ def get_layout_slots(company: str = Query(None)):
     except: return []
 
 @app.get("/api/companies")
-async def get_companies_list(): 
-    return await adapter.get_companies()
+async def get_companies_list(authorization: str = Header(None)): 
+    token = ""
+    if authorization:
+        clean_auth = authorization.strip()
+        token = clean_auth.split(" ")[1] if " " in clean_auth else clean_auth
+    return await adapter.get_companies(token)
 
 @app.get("/api/room-config")
 def get_room_config():

@@ -1,3 +1,4 @@
+import os
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -8,8 +9,9 @@ from urllib.parse import quote
 
 class BackendAdapter:
     def __init__(self):
-        # Main backend address
-        self.base_url = "https://airsenseapi.com" 
+        # Main backend address from environment variable or default
+        self.base_url = os.getenv("BACKEND_URL", "https://airsenseapi.com") 
+        print(f"📡 BackendAdapter initialized with BASE_URL: {self.base_url}")
 
     def _get_headers(self, token):
         """Adds Bearer Token to headers."""
@@ -32,7 +34,7 @@ class BackendAdapter:
                 params=params, 
                 json=json_data, 
                 verify=False,
-                allow_redirects=False
+                allow_redirects=True
             )
         )
         return response
