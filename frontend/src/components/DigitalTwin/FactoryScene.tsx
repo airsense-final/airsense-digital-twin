@@ -16,8 +16,8 @@ import { KeyboardMapMover } from "./SceneControls";
 import { CrowdSimulation } from "./CrowdSimulation";
 
 const API_URL =
-  (import.meta as any).env?.VITE_API_URL || "http://localhost:8001";
-const WS_URL = (import.meta as any).env?.VITE_WS_URL || "ws://localhost:8001";
+  (import.meta as any).env?.VITE_API_URL || "https://twin.airsenseapi.com";
+const WS_URL = (import.meta as any).env?.VITE_WS_URL || "wss://twin.airsenseapi.com";
 
 const SENSOR_TYPE_MAP: Record<string, string> = {
   Temperature: "dht11_temp",
