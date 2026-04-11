@@ -313,6 +313,21 @@ export const FactoryScene = () => {
           {isSimulating && simMode !== "NORMAL" && <SirenStrobe />}
           <KeyboardMapMover controlsRef={controlsRef} />
           <MapControls ref={controlsRef} makeDefault screenSpacePanning={true} dampingFactor={0.1} minDistance={5} maxDistance={90} />
+
+          {isSimulating && (simMode === "FIRE" || simMode === "GAS_LEAK") && (
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, 0.1, 0]}
+              onDoubleClick={(e: any) => {
+                e.stopPropagation();
+                runScenario(simMode, { x: e.point.x, y: 0.5, z: e.point.z });
+              }}
+            >
+              <planeGeometry args={[500, 500]} />
+              <meshBasicMaterial visible={false} />
+            </mesh>
+          )}
+
           <FactoryArchitecture />
           
           {estimatedAnomalyPos && !isSimulating && (
