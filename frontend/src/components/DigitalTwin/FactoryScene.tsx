@@ -231,6 +231,10 @@ export const FactoryScene = () => {
     }
   };
 
+  // Eşik değerini geçen (durumu 'critical' olan) sensörleri filtrele
+  const criticalSensors = displaySensors.filter((s) => s.status === "critical");
+
+
   return (
     <div style={{ width: "100%", height: "100vh", display: "flex", flexDirection: "column", background: "#0f172a", position: "relative" }}>
       <div style={{ background: "#0f172a", padding: "15px 25px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #1e293b", zIndex: 10 }}>
@@ -254,6 +258,31 @@ export const FactoryScene = () => {
       </div>
 
       <div style={{ flex: 1, position: "relative" }}>
+        {/* 🚨 CRITICAL ALERTS PANEL (SAĞ ÜST KÖŞE) 🚨 */}
+        {criticalSensors.length > 0 && (
+          <div style={{
+            position: "absolute", top: "80px", right: "20px", zIndex: 300,
+            background: "rgba(220, 38, 38, 0.95)", padding: "15px", borderRadius: "8px",
+            border: "2px solid #f87171", width: "240px", color: "white",
+            fontFamily: "sans-serif", maxHeight: "300px", overflowY: "auto",
+            boxShadow: "0 10px 20px rgba(0,0,0,0.5)"
+          }}>
+            <h4 style={{ margin: "0 0 10px 0", borderBottom: "1px solid #fca5a5", paddingBottom: "5px", display: "flex", alignItems: "center", gap: "8px", color: "#fff" }}>
+              ⚠️ ALARM ({criticalSensors.length})
+            </h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {criticalSensors.map(s => (
+                <div key={s.id} style={{ fontSize: "12px", background: "rgba(0,0,0,0.3)", padding: "8px", borderRadius: "6px", borderLeft: "4px solid #fef08a" }}>
+                  <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{s.name || s.sensor_type}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>Değer: <b style={{ color: "#fef08a" }}>{Number(s.value).toFixed(1)}</b></span>
+                    <span style={{ color: "#fca5a5" }}>{s.location_name}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {showReport && finalReport && (
           <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 1000, background: "rgba(15, 23, 42, 0.95)", padding: "30px", borderRadius: "12px", border: "2px solid #3b82f6", width: "400px", color: "white" }}>
             <h2 style={{ margin: "0 0 15px 0", color: "#3b82f6", borderBottom: "1px solid #334155", paddingBottom: "10px" }}>📋 Incident Report</h2>
