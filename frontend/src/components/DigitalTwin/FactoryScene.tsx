@@ -259,6 +259,23 @@ export const FactoryScene = () => {
 
       <div style={{ flex: 1, position: "relative" }}>
         {/* 🚨 CRITICAL ALERTS PANEL (SAĞ ÜST KÖŞE) 🚨 */}
+
+        {/* ℹ️ KULLANICI YÖNLENDİRME MESAJI (DOUBLE-CLICK HINT) */}
+        {isSimulating && simMode !== "NORMAL" && !simCenter && (
+          <div style={{
+            position: "absolute", top: "100px", left: "50%", transform: "translateX(-50%)",
+            zIndex: 250, background: "rgba(30, 64, 175, 0.95)", padding: "12px 24px",
+            borderRadius: "30px", border: "2px solid #60a5fa", color: "white",
+            fontFamily: "sans-serif", fontSize: "16px", fontWeight: "bold",
+            boxShadow: "0 10px 25px rgba(37, 99, 235, 0.5)",
+            display: "flex", alignItems: "center", gap: "10px",
+            animation: "pulse 2s infinite"
+          }}>
+            🖱️ Double-click anywhere on the floor to set the {simMode === "FIRE" ? "Fire" : "Gas Leak"} location!
+          </div>
+        )}
+
+        
         {criticalSensors.length > 0 && (
           <div style={{
             position: "absolute", top: "80px", right: "20px", zIndex: 300,
